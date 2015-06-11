@@ -105,17 +105,17 @@ rm(csvlist,tmp)
 col.order <- c("Name", "College", "Dept", "Start.Date", "Faculty.rank", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost", "Dept.Funding", "College.Funding", "PSI.Funding", "IPRT.Ames.Lab.Funding", "VPRED.Funding", "EVP.P.Funding", "Biotech.Funding", "Other.Funding", "Total.Funding", "Start.Date.mdy", "Beginning", "Ending", "Remarks", "Source")
 hires <- hires[,col.order]
 
-# Remove duplicates
-dups <- table(hires$Name)
-dups <- rownames(dups[which(dups>1)])
-hires$duplicated <- hires$Name%in%dups
-dups <- hires %>% filter(duplicated) %>% arrange(Name, College, Dept)
-# hires <- hires %>% filter(!duplicated)
-dups <- dups %>% group_by(Name) %>% summarize(SourceMatch = length(unique(Source)))
-dedup <- dups %>% group_by(Name, College, Dept) %>% do(function(df){
-  new.source <- paste(df$Source, collapse=", ")
-  data.frame(unique(df[,-which(names(df)=="Source")]), Source=new.source)
-})
+# # Remove duplicates
+# dups <- table(hires$Name)
+# dups <- rownames(dups[which(dups>1)])
+# hires$duplicated <- hires$Name%in%dups
+# dups <- hires %>% filter(duplicated) %>% arrange(Name, College, Dept)
+# # hires <- hires %>% filter(!duplicated)
+# dups <- dups %>% group_by(Name) %>% summarize(SourceMatch = length(unique(Source)))
+# dedup <- dups %>% group_by(Name, College, Dept) %>% do(function(df){
+#   new.source <- paste(df$Source, collapse=", ")
+#   data.frame(unique(df[,-which(names(df)=="Source")]), Source=new.source)
+# })
 
 
 # Create variable for High impact hires, so that the (HIH) notation can be removed from the college

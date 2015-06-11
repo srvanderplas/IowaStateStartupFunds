@@ -1,0 +1,234 @@
+
+# R libraries -------------------------------------------------------------------
+library(plyr) # for rbind.fill function
+library(dplyr) # for %>% operator
+library(stringr) # for string manipulation
+library(lubridate) # for date manipulation
+library(reshape2) # for reshaping data
+# -------------------------------------------------------------------------------
+
+# Data --------------------------------------------------------------------------
+# Original Excel files converted to csv, with non-header rows removed
+# Dates fixed in FacStUpMaster08.csv:
+#  Row 238: what was the starting date for Gordon Arbuckle? – start date is 7/1/2007
+#  Row 240: Was the starting date for Chenxu Yu really 11/2007? – yes, start date is 11/1/2007 as Asst Prof
+
+
+# Function to strip extra columns (blank columns without header labels) from the data
+stripExtraCols <- function(data){
+  emptycols <- grepl("^X\\.?\\d{0,}$", names(data)) | grepl("[Empty]", names(data), fixed=T)
+  data[,!emptycols]
+}
+
+# Function to format columns appropriately given diverse dataset formats
+format.cols <- function(data){
+
+  # Fix column names
+  dnames <- names(data)
+  new.dnames <- dnames %>%
+    str_replace("FY\\.Start", "Start.Date") %>%
+    str_replace("Comp\\.\\.peripherals", "Computer.peripherals") %>%
+    str_replace("Graduate\\.Asst\\.Profs", "Graduate.assistants") %>%
+    str_replace("IPRT(\\.Ames\\.Lab)?", "IPRT.Ames.Lab.Funding") %>%
+    str_replace("Dept\\.1", "Dept.Funding") %>%
+    str_replace("College\\.1", "College.Funding") %>%
+    str_replace("PSI", "PSI.Funding") %>%
+    str_replace("VPRED", "VPRED.Funding") %>%
+    str_replace("VPRES", "VPRED.Funding") %>%
+    str_replace("VProv\\.Research", "VPRED.Funding") %>%
+    str_replace("Total\\.cost", "Total.Cost") %>%
+    str_replace("Total\\.Source", "Total.Funding") %>%
+    str_replace("[SE]VP\\.P(rovost)?", "EVP.P.Funding") %>% # Executive VP vs. Senior VP?
+    str_replace("^Provost", "EVP.P.Funding") %>%
+    str_replace("Biotech", "Biotech.Funding") %>%
+    str_replace("Other$", "Other.Costs") %>%
+    str_replace("Other\\.1$", "Other.Funding") %>%
+    str_replace("\\.\\.", ".")
+
+  names(data) <- new.dnames
+
+  # Create Computer+peripherals column since some sheets have that separated
+  if(sum(c("Computer", "peripherals") %in% dnames)>0){
+    data$Computer.peripherals <- data$Computer + data$peripherals
+  }
+  # Remove unnecessary columns
+  data <- data[,!names(data)%in%c("Computer", "peripherals")]
+
+  # Turn start dates into FY notation (FY05 implies a start date near August 1, 2004)
+  if(sum(!grepl("FY", data$Start.Date))>0){
+    data$Start.Date.mdy <- mdy(data$Start.Date)
+    year(data$Start.Date.mdy) <- year(data$Start.Date.mdy) %% 2000 + 2000
+    tmp2 <- sapply(data$Start.Date.mdy, function(i) {
+      ifelse(is.na(i), NA, sprintf("FY%02d", year(round_date(i, "year"))%%2000))
+    })
+    data$Start.Date[!is.na(tmp2)] <- tmp2[!is.na(tmp2)]
+  }
+
+  # Ensure categorical variables are formatted as strings
+  Categ <- c("College", "Name", "Dept", "Start.Date", "Faculty.rank", "Pay.base", "Beginning", "Ending", "Remarks")
+  data[,which(names(data)%in%Categ)] <- apply(data[,which(names(data)%in%Categ)], 2, as.character)
+  data[,which(names(data)%in%Categ)] <- apply(data[,which(names(data)%in%Categ)], 2, str_trim)
+
+  # Ensure expenses are formatted as numeric variables (remove commas if present from Excel export)
+  Expenses <- c("Starting.salary", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Computer.peripherals", "Other.Costs", "Total.Cost")
+  data[,which(names(data)%in%Expenses)] <- apply(data[,which(names(data)%in%Expenses)], 2, function(i) str_replace_all(i, ",", ""))
+  data[,which(names(data)%in%Expenses)] <- apply(data[,which(names(data)%in%Expenses)], 2, as.numeric)
+  data[,which(names(data)%in%Expenses)] <- apply(data[,which(names(data)%in%Expenses)], 2, function(i) ifelse(is.na(i), 0, i))
+
+  # Ensure funding sources are formatted as numeric variables (remove commas if present from Excel export)
+  Funding <- new.dnames[grepl("Funding", new.dnames)]
+  data[,which(names(data)%in%Funding)] <- apply(data[,which(names(data)%in%Funding)], 2, function(i) str_replace_all(i, ",", ""))
+  data[,which(names(data)%in%Funding)] <- apply(data[,which(names(data)%in%Funding)], 2, as.numeric)
+  data[,which(names(data)%in%Funding)] <- apply(data[,which(names(data)%in%Funding)], 2, function(i) ifelse(is.na(i), 0, i))
+
+  data
+}
+
+# Get names of all csv files in the Data directory
+csvlist <- paste0("Data/", list.files("Data/", "*.csv"))
+
+# Read in all of the csv files, then remove extra columns and format the columns appropriately.
+tmp <- lapply(csvlist, function(i) {
+  j <- read.csv(i, stringsAsFactors=F) %>% stripExtraCols %>% format.cols
+  j$Source <- i
+  j[nchar(j$Name)>0,]
+  }
+)
+
+# Merge all datasets together
+hires <- do.call("rbind.fill", tmp)
+
+# Clean up
+rm(csvlist,tmp)
+
+# Order columns sensibly
+col.order <- c("Name", "College", "Dept", "Start.Date", "Faculty.rank", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost", "Dept.Funding", "College.Funding", "PSI.Funding", "IPRT.Ames.Lab.Funding", "VPRED.Funding", "EVP.P.Funding", "Biotech.Funding", "Other.Funding", "Total.Funding", "Start.Date.mdy", "Beginning", "Ending", "Remarks", "Source")
+hires <- hires[,col.order]
+
+# Remove duplicates
+dups <- table(hires$Name)
+dups <- rownames(dups[which(dups>1)])
+hires$duplicated <- hires$Name%in%dups
+dups <- hires %>% filter(duplicated) %>% arrange(Name, College, Dept)
+# hires <- hires %>% filter(!duplicated)
+dups <- dups %>% group_by(Name) %>% summarize(SourceMatch = length(unique(Source)))
+dedup <- dups %>% group_by(Name, College, Dept) %>% do(function(df){
+  new.source <- paste(df$Source, collapse=", ")
+  data.frame(unique(df[,-which(names(df)=="Source")]), Source=new.source)
+})
+
+
+# Create variable for High impact hires, so that the (HIH) notation can be removed from the college
+hires$High.Impact <- grepl("HIH", hires$College)
+col.order <- c(col.order[1:5], "High.Impact", col.order[-c(1:5)])
+
+# Format College appropriately
+hires$College <- hires$College %>%
+  str_replace(fixed(" (HIH)"), "") %>%
+  str_replace("^AG$", "CALS") %>%
+  str_replace("Agriculture", "CALS") %>%
+  str_replace("CALS", "Ag & Life Science") %>%
+  str_replace("AGLS", "Ag & Life Science") %>%
+  str_replace("^BUS$", "Business") %>%
+  str_replace("^CVM$", "Vet Med") %>%
+  str_replace("^LA[Ss]$", "Liberal Arts & Science")  %>%
+  str_replace("^E[Nn][Gg](ineering)?([Rr])?", "Engineering") %>%
+  str_replace("Engineering & ", "Engineering/") %>%
+  str_replace("^DSN$", "Design") %>%
+  str_replace("^(ED)|(FCS)|(HS)|(CHS)$", "Hum Sci")%>%
+  str_replace("^C?Hum Sci/Ext$", "Hum Sci")
+
+# For faculty with two colleges, create new rows, one for each college
+hires$College2 <- str_extract(hires$College, "[/](.*)$") %>% str_replace("/", "")
+hires$College1 <- str_extract(hires$College, "^[A-Za-z &]*/?$") %>% str_replace("/", "")
+hires$College.old <- hires$College
+col.order <- c(col.order, "College.old")
+hires <- hires[,-which(names(hires)=="College")]
+hires <- melt(hires, measure.vars = c("College1", "College2"), variable.name = "College.Num", value.name = "College")
+hires <- hires[!is.na(hires$College),]
+hires <- hires[,col.order]
+
+# Format Department appropriately
+hires$Extension <- str_detect(hires$Dept, "Ext(ension)?")
+hires$Admin <- str_detect(hires$Dept, "(College Admin)|(Director)") | str_detect(hires$Faculty.rank, "(VPR)|(Dean)|(Director)|(Provost)|(Prov)")
+hires$Dept <- hires$Dept %>%
+  str_replace("(ACCTG?)|(Accounting)", "Acct") %>%
+  str_replace("A[eE][rR]O? ?E", "AerE") %>%
+  str_replace("A&D", "Art") %>%
+  str_replace("AESC?HM", "AESHM") %>%
+  str_replace("Ag Ed & Studies", "AgEd") %>%
+  str_replace("[aA][gG][rR][oO][nN](omy)?", "Agron") %>%
+  str_replace("ABE & ", "ABE/") %>%
+  str_replace("A & D", "Art") %>%
+  str_replace("A[nN] S[cC][iI]", "AN SCI") %>%
+  str_replace("Anthro(pology)", "Anthro") %>%
+  str_replace("Arch(it?ecture)?", "Arch") %>%
+  str_replace("CCEE", "CCEE") %>%
+  str_replace("Chemistry", "Chem") %>%
+  str_replace("Community and Regional Planning", "CRP") %>%
+  str_replace("Software Eng", "SE") %>%
+  str_replace("^C( & )?I", "C&I") %>%
+  str_replace("College Admin, E CPE", "ECpE") %>%
+  str_replace("Comp?(uter)? S(ci)?", "Com S") %>%
+  str_replace("E[cC][oO][nN](omics)?", "Econ") %>%
+  str_replace("E?E ?CPE", "ECpE") %>%
+  str_replace(", ", "/") %>%
+  str_replace("EL ?PS", "ELPS") %>%
+  str_replace("English", "Engl") %>%
+  str_replace(" - IEOP", "/IEOP") %>%
+  str_replace("Entomology", "ENT") %>%
+  str_replace("(Fam Ext)|(Ext to Families)", "Extension") %>%
+  str_replace("Finance", "FIN") %>%
+  str_replace("(GE ?AT)|(Geology & Atm Sci)", "GeAt") %>%
+  str_replace("Graphic Design", "GrD") %>%
+  str_replace("History", "Hist") %>%
+  str_replace("/Director of African American Studies", "") %>%
+  str_replace(" \\(US Latino/a Studies\\)", "")%>%
+  str_replace("(HORT)|(Horticulture)", "Hort") %>%
+  str_replace("Industrial Design", "IndD") %>%
+  str_replace("Integrated Studio Art", "ISA") %>%
+  str_replace("Interior Design", "IntD") %>%
+  str_replace("KIN", "Kin") %>%
+  str_replace("Landscape Arch(itecture)?", "LA") %>%
+  str_replace("(Management)|(MGMT)", "Mgmt") %>%
+  str_replace("(Marketing)|(MKT)", "Mkt") %>%
+  str_replace("Mathematics", "Math") %>%
+  str_replace("MSE & ECpE", "MSE/ECpE") %>%
+  str_replace("(PATH)|(Pathology)", "Path") %>%
+  str_replace("Phil(osophy)? & Rel St", "Phil & RS") %>%
+  str_replace("Physics & Astr(onomy)?(pn)?", "Physics") %>%
+  str_replace("P(lant)?(LANT)? P(ath)?(ATH)?", "PLPM") %>%
+  str_replace("Pol(itical)? Sci(ence)", "Pol Sci") %>%
+  str_replace("Psyc?h?(ology)?", "Psych") %>%
+  str_replace("S[oO][cC](iolo?ogy)?", "Soc") %>%
+  str_replace("ELPS", "SOE") %>%
+  str_replace("CCE ?E", "SOE") %>%
+  str_replace("S[Tt][Aa][Tt](istics)?", "Stat") %>%
+  str_replace("VDPA[mM]", "VDPAM") %>%
+  str_replace("V[Pp][aA]?[tT][hH]", "VPath") %>%
+  str_replace("WLC", "WL&C") %>%
+  str_replace(" & African American Studies", "/A&AAS") %>%
+  str_replace("Music & Theatre", "Music/Theatre") %>%
+  str_replace("ECpE & MSE", "ECpE/MSE") %>%
+  str_replace("Extension", "") %>%
+  str_replace("^/|/$", "") %>%
+  str_replace(fixed("??"), "Acct") # Dr. Lamboy-Ruiz is an accounting professor according to business.iastate.edu.
+
+hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?$") %>% str_replace("/", "")
+hires$Dept2 <- str_extract(hires$Dept, "[/](.*)$") %>% str_replace_all("/", "")
+col.order <- c(col.order[1:3], "Dept1", "Dept2", "Extension", "Admin", col.order[-c(1:3)])
+
+# Create  year variable for plotting
+hires$Year <- as.numeric(gsub("FY", "", hires$Start.Date)) + 2000
+hires$Year[!grepl("FY", hires$Start.Date)] <- NA
+col.order <- c(col.order[1:2], "Year", col.order[-c(1:2)])
+hires <- hires[,col.order]
+
+# Create separate funding/allocation datasets
+funding <- hires[,c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", names(hires)[grepl("Funding", names(hires))])]
+
+funding <- melt(funding, id.vars=c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Total.Funding"), variable.name="Source", value.name="Amount")
+funding$Source <- str_replace(funding$Source, "\\.Funding", "")
+
+startup.package <- hires[,c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost")]
+startup.package <- melt(startup.package, id.vars=c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Total.Cost"), variable.name="Item", value.name="Amount")

@@ -72,7 +72,7 @@ source("Code/CleanData.R")
 ```
 
 ### Total Startup Package Cost
-```{r TotalCost, echo=F, fig.width=6, fig.height=3, fig.cap="Total Startup Package Cost, by College"}
+```{r TotalCost, echo=F, fig.width=6, fig.height=4, fig.cap="Total Startup Package Cost, by College"}
 qplot(Year, Total.Cost, color=Dept1, data=hires, geom="jitter", size=High.Impact, shape=I(1)) +
 scale_y_log10() +
 scale_color_discrete(guide="none") +
@@ -82,7 +82,7 @@ theme_bw() +
 facet_wrap(~College, ncol=4)
 ```
 
-```{r ExpenseProportion, echo=F, fig.width=6, fig.height=3, fig.cap="Proportion of startup $ allocated for computers"}
+```{r ExpenseProportion, echo=F, fig.width=6, fig.height=4, fig.cap="Proportion of startup $ allocated for computers"}
 qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Computer.peripherals"), geom="jitter", shape=I(1)) +
 scale_color_discrete(guide="none") +
 theme_bw() +

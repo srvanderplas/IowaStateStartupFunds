@@ -1,0 +1,91 @@
+---
+title: "Startup Funds Investigation"
+author: "Susan VanderPlas"
+date: "June 10, 2015"
+output: 
+  knitrBootstrap:::bootstrap_document:
+    theme: cerulean
+    highlight: idea
+    menu: FALSE
+    clean_supporting: TRUE
+---
+
+
+```{r setup, echo=FALSE}
+library(knitr)
+library(htmltools)
+library(ggplot2)
+# s0 <- knitr::knit_hooks$get('source')
+# knitr::knit_hooks$set(
+#   list(
+#     source=function(x,options){
+#       if(is.null(options$class)) s0(x, options)
+#       else
+#         tags$button(class=c())
+#     }
+#   )
+# )
+# 
+knitr::opts_chunk$set(bootstrap.show.code=FALSE, bootstrap.show.output=FALSE, bootstrap.show.message=FALSE, warning=F, message=F, out.width="100%", cache=T, echo=F)
+knitr::opts_knit$set(root.dir="../../IowaStateStartupFunds/")
+```
+
+# Introduction
+
+## Goals for the project:
+
+1. Examine trends (or lack thereof) in startup funding over time
+2. Examine return on investment for startup funding 
+    - Publications
+    - Proposals submitted
+    - Grants received
+    - Tenure
+
+## Data: 
+
+1. Spreadsheets from the Office of the Vice President for Research
+    - Name, Department, College, Salary, Start Date
+    - Startup package allocation (by category) 
+    - Source of startup funding
+2. Database from Office of Sponsored Programs Administration (2 databases, 2005-2010 and 2010-2015. Early database will be messier)
+    - Grants received (by month, as well as total award $$)
+    - Proposals submitted
+3. Additional information 
+    - Publications (from scraping Google Scholar)
+    - Where individuals came from (public/private institution, small/large)
+
+
+## Other factors:
+
+- 2003-2008 was a competitive hiring season (may have larger startup packages as a result)
+- 2008 Crash and budget freeze at the state level
+- American Recovery and Reinvestment Act (2009) with increased funding levels
+- 2012 slowdown in research funding (may need to compare to NSF/NIH/USDA/DOD/DOE/Ames Lab funding levels)
+
+
+# Analysis
+
+## Office of the Vice President for Research Data
+
+```{r OVPRdata}
+source("Code/CleanData.R")
+```
+
+### Total Startup Package Cost
+```{r TotalCost, echo=F, fig.width=6, fig.height=3, fig.cap="Total Startup Package Cost, by College"}
+qplot(Year, Total.Cost, color=Dept1, data=hires, geom="jitter", size=High.Impact, shape=I(1)) +
+scale_y_log10() +
+scale_color_discrete(guide="none") +
+scale_size_manual("High Impact Hire", values=c(2, 4)) +
+ggtitle("Total Startup Package Cost")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+```
+
+```{r ExpenseProportion, echo=F, fig.width=6, fig.height=3, fig.cap="Proportion of startup $ allocated for computers"}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Computer.peripherals"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+```
+

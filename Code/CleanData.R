@@ -111,11 +111,23 @@ hires <- hires[,col.order]
 # hires$duplicated <- hires$Name%in%dups
 # dups <- hires %>% filter(duplicated) %>% arrange(Name, College, Dept)
 # # hires <- hires %>% filter(!duplicated)
-# dups <- dups %>% group_by(Name) %>% summarize(SourceMatch = length(unique(Source)))
+# 
+# # Function to paste strings that don't match together
+# collapseDuplicates <- function(df){
+#   match.vars <- col.order[1:24]
+#   newdf <- unique(df[,match.vars])
+#   
+#   nomatch.vars <- col.order[-c(1:24)]
+#   
+#   
+# }
+# 
+# dups2 <- dups %>% group_by(Name) %>% summarize(SourceMatch = length(table(Source)), uniqueRows = function(i) {nrow(unique(i[,1:24]))})
 # dedup <- dups %>% group_by(Name, College, Dept) %>% do(function(df){
 #   new.source <- paste(df$Source, collapse=", ")
 #   data.frame(unique(df[,-which(names(df)=="Source")]), Source=new.source)
 # })
+
 
 
 # Create variable for High impact hires, so that the (HIH) notation can be removed from the college

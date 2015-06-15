@@ -1,4 +1,3 @@
-
 # R libraries -------------------------------------------------------------------
 library(plyr) # for rbind.fill function
 library(dplyr) # for %>% operator

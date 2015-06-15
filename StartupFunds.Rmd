@@ -67,26 +67,125 @@ knitr::opts_knit$set(root.dir="../../IowaStateStartupFunds/")
 
 ## Office of the Vice President for Research Data
 
-```{r OVPRdata}
-source("Code/CleanData.R")
+```{r OVPRdata, cache=F}
+source("Code/CleanStartupFundingData.R")
 ```
 
 ### Total Startup Package Cost
 ```{r TotalCost, echo=F, fig.width=9, fig.height=5, fig.cap="Total Startup Package Cost, by College"}
-qplot(Year, Total.Cost, color=Dept1, data=hires, geom="jitter", size=High.Impact, shape=I(1)) +
+qplot(Year, Total.Cost, color=Dept1, data=hires, geom="jitter", shape=I(1)) +
 scale_y_log10() +
 scale_color_discrete(guide="none") +
-scale_size_manual("High Impact Hire", values=c(2, 4)) +
 ggtitle("Total Startup Package Cost")  +
 theme_bw() +
 facet_wrap(~College, ncol=4)
 ```
 
-```{r ExpenseProportion, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for computers"}
+### Computing Expenses
+```{r ComputingExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for computers", "Amount allocated for computers")}
 qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Computer.peripherals"), geom="jitter", shape=I(1)) +
 scale_color_discrete(guide="none") +
-ggtitle("Proportion of package allocated to computer equipment")  +
+ggtitle("Proportion of package allocated to computer equip.")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Computer.peripherals"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Amount of startup funds allocated for computer equip.")  +
+  scale_y_sqrt(breaks=c(0, 1000, 5000, 10000, 100000), label=c("0", "$1000", "$2500", "$10K", "$100K")) +
+ylab("Amount") + 
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+In Ag & Life Science, I suspect the computer allocation has decreased due to Moore's law (it's cheaper to get computers that can process genetic data now than it was in 2005). Engineering allocations seem to be somewhat department-related (clustering of green and blue values, in particular). The business school seems remarkably standardized - the amount decreased in 2011-2013, but otherwise has been at approximately the same level (with extremely low variance). 
+
+
+### Lab Space/Equipment Expenses
+```{r LabExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for lab space and equipment.", "Amount allocated for lab space and equpment")}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Lab.space.equipment"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated to lab space/equip.")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Lab.space.equipment"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Amount of startup funds allocated for lab space/equip.")  +
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+Lab space and lab equipment are obviously only relevant for some colleges. The proportion and raw amount of funding for lab space and equipment in LAS has decreased, while the amount of funding in engineering and human sciences has increased (though the proportion of the funding package has stayed reasonably consistent).  
+
+
+### Graduate Assistant Expenses
+```{r GradExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for graduate assistant support.", "Amount allocated for graduate assistant support")}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Graduate.assistants"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+  geom_smooth(aes(x=Year, y=Amount/Total.Cost), color=I("black"), data=subset(startup.package, Item=="Graduate.assistants")) + 
+ggtitle("Proportion of package allocated for graduate assistants")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Graduate.assistants"), geom="jitter", shape=I(1)) +
+  geom_smooth(aes(x=Year, y=Amount), color=I("black"), data=subset(startup.package, Item=="Graduate.assistants")) + 
+scale_color_discrete(guide="none") +
+ggtitle("Amount of startup funds allocated for graduate assistants")  +
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+The recession seems to have hit graduate student support fairly hard (relative to other expenses). Looking at the gross amount of funding allocated for graduate students, we see that startup packages in engineering and human sciences include more support for graduate students than in the past (this is particularly dramatic in human sciences, though the amount of funding is still overall lower than in engineering). In the other colleges, the amount of support for graduate students has stayed relatively consistent over the past 10 years. 
+
+
+### Summer Support
+```{r SummerExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for summer support."}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Summer.support"), geom="jitter", shape=I(1)) +
+  geom_smooth(aes(x=Year, y=Amount/Total.Cost), color=I("black"), data=subset(startup.package, Item=="Summer.support")) + 
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated for summer support")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Summer.support"), geom="jitter", shape=I(1)) +
+  geom_smooth(aes(x=Year, y=Amount), color=I("black"), data=subset(startup.package, Item=="Summer.support")) + 
+scale_color_discrete(guide="none") +
+ggtitle("Amount of startup funds allocated for summer support")  +
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+Summer funding seems to be fairly common in some areas (business, some of LAS) and almost unheard of in others (design, vet med). 
+
+### Research Support
+```{r ResearchExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for research support.", "Amount of startup $ allocated for research support.")}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Research.support"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated for research support")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Research.support"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Amount of funding allocated for research support")  +
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+### Moving Expenses
+```{r MovingExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for moving expenses.", "Amount allocated to moving expenses")}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Moving.expenses"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated for moving expenses")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Moving.expenses"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Amount allocated for moving expenses")  +
 theme_bw() +
 facet_wrap(~College, ncol=4)
 ```
 
+Moving expenses amounts seem to be reasonably consistent across colleges. The business college seems to once again have a standard package that may change year to year with occasional negotiation. The same may be true of the vet med college. 

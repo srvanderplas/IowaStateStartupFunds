@@ -84,50 +84,41 @@ format.cols <- function(data){
   data
 }
 
-# Get names of all csv files in the Data directory
-csvlist <- paste0("Data/", list.files("Data/", "*.csv"))
+# List all csvs in the data directory, by most recent
+csvlist <- c(
+  "Data/Academic Div Faculty Startup FY15.csv", 
+  "Data/Acad Div-ver10-16-13 ----Y14 Faculty Start-up compiled rpt.csv", 
+  "Data/FY13 Faculty start-up report-Acad Division.csv", 
+  "Data/FY12-MASTERFacultyStartupRpt.csv", 
+  "Data/FY11MasterFacStUp.csv", 
+  "Data/FY09-11FacStUp.csv", 
+  "Data/FacStUpMaster08.csv", 
+  "Data/FY07-05 file to IR.csv")
+csvlist <- factor(csvlist, levels=csvlist, ordered=T)
+# csvlist <- paste0("Data/", list.files("Data/", "*.csv"))
+
+fylist <- c(2015, 2014, 2013, 2012, 2011, 2010, 2008, 2006)
 
 # Read in all of the csv files, then remove extra columns and format the columns appropriately.
 tmp <- lapply(csvlist, function(i) {
-  j <- read.csv(i, stringsAsFactors=F) %>% stripExtraCols %>% format.cols
+  j <- read.csv(as.character(i), stringsAsFactors=F) %>% stripExtraCols %>% format.cols
   j$Source <- i
   j[nchar(j$Name)>0,]
   }
 )
 
 # Merge all datasets together
-hires <- do.call("rbind.fill", tmp)
-
-# Clean up
-rm(csvlist,tmp)
+hires <- do.call("rbind.fill", tmp) %>% arrange(Name, Source)
 
 # Order columns sensibly
 col.order <- c("Name", "College", "Dept", "Start.Date", "Faculty.rank", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost", "Dept.Funding", "College.Funding", "PSI.Funding", "IPRT.Ames.Lab.Funding", "VPRED.Funding", "EVP.P.Funding", "Biotech.Funding", "Other.Funding", "Total.Funding", "Start.Date.mdy", "Beginning", "Ending", "Remarks", "Source")
-hires <- hires[,col.order]
+hires <- hires[,col.order] %>% arrange(Name, Source)
 
-# # Remove duplicates
-# dups <- table(hires$Name)
-# dups <- rownames(dups[which(dups>1)])
-# hires$duplicated <- hires$Name%in%dups
-# dups <- hires %>% filter(duplicated) %>% arrange(Name, College, Dept)
-# # hires <- hires %>% filter(!duplicated)
-# 
-# # Function to paste strings that don't match together
-# collapseDuplicates <- function(df){
-#   match.vars <- col.order[1:24]
-#   newdf <- unique(df[,match.vars])
-#   
-#   nomatch.vars <- col.order[-c(1:24)]
-#   
-#   
-# }
-# 
-# dups2 <- dups %>% group_by(Name) %>% summarize(SourceMatch = length(table(Source)), uniqueRows = function(i) {nrow(unique(i[,1:24]))})
-# dedup <- dups %>% group_by(Name, College, Dept) %>% do(function(df){
-#   new.source <- paste(df$Source, collapse=", ")
-#   data.frame(unique(df[,-which(names(df)=="Source")]), Source=new.source)
-# })
+# Remove duplicates
+hires <- hires %>% group_by(Name) %>% arrange(Name, Source) %>% slice(1L)
 
+# Clean up
+rm(csvlist,tmp)
 
 
 # Create variable for High impact hires, so that the (HIH) notation can be removed from the college
@@ -158,9 +149,13 @@ col.order <- c(col.order, "College.old")
 hires <- hires[,-which(names(hires)=="College")]
 hires <- melt(hires, measure.vars = c("College1", "College2"), variable.name = "College.Num", value.name = "College")
 hires <- hires[!is.na(hires$College),]
-hires <- hires[,col.order]
+hires <- hires[,col.order] %>% arrange(Name, Dept)
+
+# Read in program list
+dept.prog <- read.csv("Data/ISUDepartments.csv", stringsAsFactors = F)
 
 # Format Department appropriately
+hires$Dept.old <- hires$Dept
 hires$Extension <- str_detect(hires$Dept, "Ext(ension)?")
 hires$Admin <- str_detect(hires$Dept, "(College Admin)|(Director)") | str_detect(hires$Faculty.rank, "(VPR)|(Dean)|(Director)|(Provost)|(Prov)")
 hires$Dept <- hires$Dept %>%
@@ -175,11 +170,10 @@ hires$Dept <- hires$Dept %>%
   str_replace("A[nN] S[cC][iI]", "AN SCI") %>%
   str_replace("Anthro(pology)", "Anthro") %>%
   str_replace("Arch(it?ecture)?", "Arch") %>%
-  str_replace("CCEE", "CCEE") %>%
   str_replace("Chemistry", "Chem") %>%
   str_replace("Community and Regional Planning", "CRP") %>%
-  str_replace("Software Eng", "SE") %>%
-  str_replace("^C( & )?I", "C&I") %>%
+  str_replace("Software Eng", "SoftE") %>%
+  str_replace("^C( & )?I", "SOE") %>%
   str_replace("College Admin, E CPE", "ECpE") %>%
   str_replace("Comp?(uter)? S(ci)?", "Com S") %>%
   str_replace("E[cC][oO][nN](omics)?", "Econ") %>%
@@ -194,41 +188,55 @@ hires$Dept <- hires$Dept %>%
   str_replace("(GE ?AT)|(Geology & Atm Sci)", "GeAt") %>%
   str_replace("Graphic Design", "GrD") %>%
   str_replace("History", "Hist") %>%
-  str_replace("/Director of African American Studies", "") %>%
-  str_replace(" \\(US Latino/a Studies\\)", "")%>%
+  str_replace("/Director of African American Studies", "/A&AAS") %>%
+  str_replace(" \\(US Latino/a Studies\\)", "USLS")%>%
   str_replace("(HORT)|(Horticulture)", "Hort") %>%
   str_replace("Industrial Design", "IndD") %>%
-  str_replace("Integrated Studio Art", "ISA") %>%
+  str_replace("Integrated Studio Art", "A&VC") %>%
   str_replace("Interior Design", "IntD") %>%
   str_replace("KIN", "Kin") %>%
   str_replace("Landscape Arch(itecture)?", "LA") %>%
   str_replace("(Management)|(MGMT)", "Mgmt") %>%
-  str_replace("(Marketing)|(MKT)", "Mkt") %>%
+  str_replace("(Marketing)|(MKT)", "Mktg") %>%
   str_replace("Mathematics", "Math") %>%
   str_replace("MSE & ECpE", "MSE/ECpE") %>%
-  str_replace("(PATH)|(Pathology)", "Path") %>%
-  str_replace("Phil(osophy)? & Rel St", "Phil & RS") %>%
-  str_replace("Physics & Astr(onomy)?(pn)?", "Physics") %>%
   str_replace("P(lant)?(LANT)? P(ath)?(ATH)?", "PLPM") %>%
+  str_replace("(PATH)|(Pathology)", "VPath") %>%
+  str_replace("Phil(osophy)? & Rel St", "Phil & RS") %>%
+  str_replace(" & Astr(onomy)?(pn)?", "") %>%
   str_replace("Pol(itical)? Sci(ence)", "Pol Sci") %>%
   str_replace("Psyc?h?(ology)?", "Psych") %>%
   str_replace("S[oO][cC](iolo?ogy)?", "Soc") %>%
   str_replace("ELPS", "SOE") %>%
-  str_replace("CCE ?E", "SOE") %>%
+  str_replace("CCE ?E", "CCEE") %>%
   str_replace("S[Tt][Aa][Tt](istics)?", "Stat") %>%
   str_replace("VDPA[mM]", "VDPAM") %>%
   str_replace("V[Pp][aA]?[tT][hH]", "VPath") %>%
   str_replace("WLC", "WL&C") %>%
   str_replace(" & African American Studies", "/A&AAS") %>%
-  str_replace("Music & Theatre", "Music/Theatre") %>%
+  str_replace("Music & Theatre", "M&T") %>%
   str_replace("ECpE & MSE", "ECpE/MSE") %>%
   str_replace("Extension", "") %>%
-  str_replace("^/|/$", "") %>%
+  str_replace("^/|/$", "") %>% 
+  str_replace("LOMIS", "SCIS") %>%
+  str_replace("Art", "A&VC") %>%
+  str_replace("RISE", "SOE") %>%
   str_replace(fixed("??"), "Acct") # Dr. Lamboy-Ruiz is an accounting professor according to business.iastate.edu.
 
 hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?$") %>% str_replace("/", "")
 hires$Dept2 <- str_extract(hires$Dept, "[/](.*)$") %>% str_replace_all("/", "")
-col.order <- c(col.order[1:3], "Dept1", "Dept2", "Extension", "Admin", col.order[-c(1:3)])
+
+dept2.is.prog <- hires$Dept2%in%dept.prog$Abbr[dept.prog$Type=="Prog"]
+
+hires$Prog <- NA
+hires$Prog[dept2.is.prog] <- hires$Dept2[dept2.is.prog]
+hires$Dept[dept2.is.prog] <- str_replace(hires$Dept, hires$Dept2, "") %>% str_replace("(^/)|(/$)", "")
+rm(dept2.is.prog)
+
+hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?$") %>% str_replace("/", "")
+hires$Dept2 <- str_extract(hires$Dept, "[/](.*)$") %>% str_replace_all("/", "")
+
+col.order <- c(col.order[1:3], "Dept1", "Dept2", "Prog", "Extension", "Admin", col.order[-c(1:3)], "Dept.old")
 
 # Create  year variable for plotting
 hires$Year <- as.numeric(gsub("FY", "", hires$Start.Date)) + 2000
@@ -237,10 +245,10 @@ col.order <- c(col.order[1:2], "Year", col.order[-c(1:2)])
 hires <- hires[,col.order]
 
 # Create separate funding/allocation datasets
-funding <- hires[,c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", names(hires)[grepl("Funding", names(hires))])]
+funding <- hires[,c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Prog", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", names(hires)[grepl("Funding", names(hires))])]
 
-funding <- melt(funding, id.vars=c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Total.Funding"), variable.name="Source", value.name="Amount")
+funding <- melt(funding, id.vars=c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Prog", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Total.Funding"), variable.name="Source", value.name="Amount")
 funding$Source <- str_replace(funding$Source, "\\.Funding", "")
 
-startup.package <- hires[,c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost")]
-startup.package <- melt(startup.package, id.vars=c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Total.Cost"), variable.name="Item", value.name="Amount")
+startup.package <- hires[,c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Prog", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost")]
+startup.package <- melt(startup.package, id.vars=c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Prog", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Total.Cost"), variable.name="Item", value.name="Amount")

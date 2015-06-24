@@ -215,17 +215,17 @@ qplot(Proposal.Status, fill=Source, position="stack", data=prop) + theme_bw() +
   theme(legend.position="bottom")  +
   ggtitle("Proposal Status")
 
-prop.unique <- prop %>% group_by(Proposal.Number, Submit.Date, Source) %>% summarise(ct=length(Proposal.Number))
+prop.unique <- prop %>% group_by(Proposal.Number, Submit.Date, Source2) %>% summarise(ct=length(Proposal.Number))
 
-qplot(floor_date(Submit.Date, "month"), color=I("black"), fill=Source, position="stack", data=prop.unique) + theme_bw() + theme(legend.position="bottom") + xlab("Submission Date") + ylab("Count") + ggtitle("Number of Proposals Submitted")
+qplot(floor_date(Submit.Date, "month"), color=I("black"), fill=Source2, position="stack", data=prop.unique) + theme_bw() + theme(legend.position="bottom") + xlab("Submission Date") + ylab("Count") + ggtitle("Number of Proposals Submitted")
 
 rm(prop.unique)
 
-prop.span <- melt(prop, id.vars = c("Proposal.Number", "Source", "Proposal.Title"), measure.vars=c("Start.Date", "End.Date", "Submit.Date"), value.name = "Date", variable.name = "Proposal.Span")
+prop.span <- melt(prop, id.vars = c("Proposal.Number", "Source2", "Proposal.Title"), measure.vars=c("Start.Date", "End.Date", "Submit.Date"), value.name = "Date", variable.name = "Proposal.Span")
 prop.span$Proposal.Span <- factor(prop.span$Proposal.Span, levels=c("Submit.Date", "Start.Date", "End.Date"))
 
 ggplot(data=prop.span) + 
-  geom_histogram(aes(x=floor_date(Date, "quarter"), fill=factor(Source, labels=c("FY11-FY16", "FY06-FY10"))), 
+  geom_histogram(aes(x=floor_date(Date, "quarter"), fill=Source2), 
                position="stack", adjust=1.25, trim=T, binwidth=15*60*24*365) + 
   facet_grid(Proposal.Span~.) + 
   theme_bw() + 
@@ -233,7 +233,7 @@ ggplot(data=prop.span) +
   scale_fill_discrete("Data Source") + xlab("Date") + ylab("Density") + ggtitle("Proposal Timeline") + 
   theme(legend.position="bottom") 
 
-prop.span <- melt(prop, id.vars = c("Proposal.Number", "Source", "Proposal.Title", "Submit.Date"), measure.vars=c("Start.Date", "End.Date"), value.name = "Date", variable.name = "Proposal.Span")
+prop.span <- melt(prop, id.vars = c("Proposal.Number", "Source2", "Proposal.Title", "Submit.Date"), measure.vars=c("Start.Date", "End.Date"), value.name = "Date", variable.name = "Proposal.Span")
 prop.span$Proposal.Span <- factor(prop.span$Proposal.Span, levels=c("Start.Date", "End.Date"))
 prop.span$FundingLag <- with(prop.span, difftime(Date, Submit.Date, units="days")) 
 prop.span$FundingLag <- as.numeric(prop.span$FundingLag)/(365.25) # convert to years
@@ -243,7 +243,6 @@ ggplot(data=prop.span) +
   facet_wrap(~Proposal.Span, scales="free_x") + 
   theme_bw() + 
   scale_x_continuous(limits=c(-1, 10), breaks=0:9) + 
-  scale_fill_discrete("Data Source") + 
   xlab("Years from Proposal Submission Date") + ylab("Count") + ggtitle("Proposal Timeline") + 
   theme(legend.position="bottom") 
 

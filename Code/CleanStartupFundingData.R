@@ -251,3 +251,7 @@ funding$Source <- str_replace(funding$Source, "\\.Funding", "")
 
 startup.package <- hires[,c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Prog", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost")]
 startup.package <- melt(startup.package, id.vars=c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Prog", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Total.Cost"), variable.name="Item", value.name="Amount")
+
+
+# Cleaning up -------------------------------------------------------------------
+rm(format.cols, stripExtraCols, dept.prog, col.order, fylist)

@@ -58,7 +58,7 @@ awards.05.tot$purpose[awards.05.tot$purpose%in%c("Instruction/Training")] <- "In
 
 
 awards.05.tot <- awards.05.tot[,c("id", "title", "status", "type", "purpose", "agency", "account_num", "payment_start", "payment_end", "tot.amt.paid", "Role", "Investigator")]
-names(awards.05.tot) <- c("Award.Number", "Awards.Title", "Award.Status", "Award.Type", "Activity.Type", "Sponsor", "Account", "Start.Date", "End.Date", "Award.Amount", "Role", "Investigator")
+names(awards.05.tot) <- c("Award.Number", "Award.Title", "Award.Status", "Award.Type", "Activity.Type", "Sponsor", "Account", "Start.Date", "End.Date", "Award.Amount", "Role", "Investigator")
 awards.05.tot$Source <- "Awards FY06 to FY10.csv"
 
 # 2011-2015 awards --------------------------------------------------------------
@@ -83,6 +83,8 @@ awards.11$Investigator <- str_replace(awards.11$Investigator, " ", ", ")
 awards.11 <- subset(awards.11, nchar(Investigator)>1)
 
 awards.11$Source <- "KC Investigator Award ALL 06072015.csv"
+
+# Remove awards that were purged or have zero value
 
 
 # Combined awards ---------------------------------------------------------------

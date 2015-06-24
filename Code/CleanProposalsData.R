@@ -29,8 +29,10 @@ prop.05$submit_datetime <- mdy_hm(prop.05$submit_datetime)
 prop.05$period_to <- mdy_hm(prop.05$period_to)
 prop.05$period_from <- mdy_hm(prop.05$period_from)
 
+prop.05$status[prop.05$status=="Archive"] <- "Rejected"
+
 # Remove rows which don't have IDs or submit dates later than 2004
-prop.05 <- subset(prop.05, !is.na(id) & !is.na(lastname) & submit_datetime>mdy("01-01-2004") & status!="EXECUTED")
+prop.05 <- subset(prop.05, !is.na(id) & !is.na(lastname) & submit_datetime>mdy("01-01-2004") & status!="Executed")
 
 # Format Investigator name similar to 2011-2015 file
 prop.05$Investigator <- with(prop.05, paste(toupper(lastname), toupper(firstname), sep=", "))
@@ -52,7 +54,6 @@ prop.05.tot <- prop.05 %>%
          Role = c("PI", "COI")[as.numeric(principal>1)+1]) %>% 
   arrange(id) 
 
-prop.05$status[prop.05$status=="Archive"] <- "Rejected"
 prop.05.tot$purpose <- str_to_title(prop.05.tot$purpose)
 prop.05.tot$purpose[prop.05.tot$purpose%in%c("Scholarship", "Fellowship")] <- "Scholarships & Fellowships"
 prop.05.tot$purpose[prop.05.tot$purpose%in%c("Extension/Public")] <- "Public Service"

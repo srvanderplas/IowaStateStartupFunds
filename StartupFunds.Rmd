@@ -207,8 +207,9 @@ prop$Source2 <- factor(prop$Source, labels=c("FY06-FY10", "FY11-FY16"), levels=c
 
 qplot(Activity.Type, data=prop, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Proposal Activities")
 
-qplot(Award.Type, data=prop, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Funding Award Type")
+qplot(Proposal.Type, data=prop, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Proposal Type")
 
+qplot(Grant.Type, data=prop, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Funding Type")
 
 qplot(Proposal.Status, fill=Source, position="stack", data=prop) + theme_bw() + 
   theme(legend.position="bottom")  +

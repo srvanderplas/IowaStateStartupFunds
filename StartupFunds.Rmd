@@ -249,9 +249,10 @@ ggplot(data=prop.span) +
 rm(prop.span)
 
 ggplot(data=prop) + 
-  geom_histogram(aes(x=as.numeric(difftime(End.Date, Start.Date, units="days")/365.25)), binwidth=.25) + 
+  geom_histogram(aes(x=as.numeric(difftime(End.Date, Start.Date, units="days")/365.25)), 
+                 binwidth=.25, color="black", fill="grey") + 
   scale_x_continuous("Proposal Duration", limits=c(0, 10), breaks=0:10) + 
-  ylab("Count") + ggtitle("Duration of Proposed Funding") + 
+  ylab("Count") + ggtitle("Duration of Proposed Funding") + theme_bw() + 
   theme(legend.position="bottom") 
 
 ```
@@ -286,7 +287,7 @@ ggplot(data=awards) +
   scale_x_continuous("Years of Funding", limits=c(-1, 10), breaks=0:9) + 
   scale_fill_discrete("Data Source") + xlab("Date") + ylab("Count") + ggtitle("Funding Span") + theme(legend.position="bottom")
 
-qplot(Award.Status, data=awards) + facet_wrap(~Source2) + theme_bw() + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Award Status")
+qplot(Award.Status, data=awards, color=I("black"), fill=I("grey")) + facet_wrap(~Source2) + theme_bw() + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Award Status")
 
 awards$novalue <- c("No Monetary Value", "Monetary Value")[1+as.numeric(awards$Award.Amount>0)]
 qplot(Award.Status, fill=novalue, position="stack", data=awards, facets=~Source2) + theme_bw() + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Award Status by Grant Amount")

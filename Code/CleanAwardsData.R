@@ -65,6 +65,9 @@ awards.05.tot$Source <- "Awards FY06 to FY10.csv"
 # cleaned and formatted more carefully
 
 awards.11 <- read.csv("Data/KC Investigator Award ALL 06072015.csv", stringsAsFactors = F)
+awards.11.m <- read.csv("Data/KC Award Report FY11 to FY15 through 06072015.csv", stringsAsFactors = F)
+awards.11 <- subset(awards.11, Award.Number%in%awards.11.m$Award.Number)
+rm(awards.11.m)
 
 var.cat <- c("Award.Number", "Award.Title", "Award.Status", "Award.Type", "Activity.Type", "Sponsor", "Sponsor.Award.Number", "Role", "Investigator")
 var.num <- c("Account", "Award.Amount")

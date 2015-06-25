@@ -12,7 +12,8 @@ library(reshape2) # for reshaping data
 # 2005-2010 Proposals -----------------------------------------------------------
 
 # data is not cleaned
-prop.05 <- read.csv("Data/Proposals FY06 to FY10.csv", stringsAsFactors = F)
+prop.05 <- read.csv("Data/Proposals FY06 to FY10 with Witdrawn added 06202015.csv", stringsAsFactors = F)
+names(prop.05) <- c("Month", "Year", "FY", "id", "lastname", "firstname", "principal", "dept", "center", "proposal_num", "account_num", "purpose", "status", "submit_datetime", "type", "type_fed", "period_from", "period_to", "proposed_amount", "admin_unit", "agency", "title", "program")
 
 # Ensure variable formatting matches variable type
 var.cat <- c("Month", "agency", "lastname", "firstname", "dept", "center", "proposal_num", "purpose", "status", "admin_unit",  "title", "program")
@@ -25,9 +26,9 @@ prop.05[,which(names(prop.05)%in%var.num)] <- apply(prop.05[,which(names(prop.05
 prop.05[,which(names(prop.05)%in%var.num)] <- apply(prop.05[,which(names(prop.05)%in%var.num)], 2, str_trim)
 prop.05[,which(names(prop.05)%in%var.num)] <- apply(prop.05[,which(names(prop.05)%in%var.num)], 2, as.numeric)
 # prop.05[,which(names(prop.05)%in%var.num)] <- apply(prop.05[,which(names(prop.05)%in%var.num)], 2, function(i) ifelse(is.na(i), 0, i))
-prop.05$submit_datetime <- mdy_hm(prop.05$submit_datetime)
-prop.05$period_to <- mdy_hm(prop.05$period_to)
-prop.05$period_from <- mdy_hm(prop.05$period_from)
+prop.05$submit_datetime <- ymd_hms(prop.05$submit_datetime)
+prop.05$period_to <- ymd_hms(prop.05$period_to)
+prop.05$period_from <- ymd_hms(prop.05$period_from)
 
 prop.05$status[prop.05$status=="Archive"] <- "Rejected"
 
@@ -56,8 +57,10 @@ prop.05.tot <- prop.05 %>%
 
 prop.05.tot$purpose <- str_to_title(prop.05.tot$purpose)
 prop.05.tot$purpose[prop.05.tot$purpose%in%c("Scholarship", "Fellowship")] <- "Scholarships & Fellowships"
-prop.05.tot$purpose[prop.05.tot$purpose%in%c("Extension/Public")] <- "Public Service"
+prop.05.tot$purpose[prop.05.tot$purpose%in%c("Extension/Public", "Dept/Admin Support", "Miscellaneous")] <- "Public Service"
 prop.05.tot$purpose[prop.05.tot$purpose%in%c("Instruction/Training")] <- "Instruction"
+prop.05.tot$purpose[prop.05.tot$purpose%in%c("Research", "Equipment")] <- "Research"
+prop.05.tot$purpose[prop.05.tot$purpose%in%c("Building")] <- "Operations & Maintenance"
 
 
 prop.05.tot <- prop.05.tot[,c("id", "title", "status", "type", "purpose", 
@@ -72,6 +75,9 @@ prop.05.tot$Source <- "Proposals FY06 to FY10.csv"
 # cleaned and formatted more carefully
 
 prop.11 <- read.csv("Data/KC Investigator Proposal ALL 06072015.csv", stringsAsFactors = F)
+prop.11.m <- read.csv("Data/KC Proposal Report FY11 to FY15 through 06072015.csv", stringsAsFactors = F)
+prop.11 <- subset(prop.11, Proposal.Number%in%prop.11.m$Proposal.Number)
+rm(prop.11.m)
 
 var.cat <- c("Proposal.Number", "Proposal.Title", "Proposal.Status", "Proposal.Type", "Activity.Type", "Sponsor", "Sponsor.Type", "Role", "Investigator")
 var.num <- c("Proposal.Amount", "Direct.Cost", "Indirect.Cost")

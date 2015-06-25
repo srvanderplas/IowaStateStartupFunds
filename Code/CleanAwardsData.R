@@ -41,7 +41,7 @@ type_fed.map <- c("", "Agriculture (USDA)", "Defense", "HHS", "NASA", "Commerce"
 # Create awards total by PI
 awards.05.tot <- awards.05 %>% 
   group_by(id, title, status, type, type_fed, purpose, agency, account_num, Investigator, principal)  %>%
-  summarize(payment_start=min(period_from), payment_end=max(period_to), tot.amt.paid=sum(total), n=length(total))%>% 
+  summarize(record_start=min(award_date), record_end=max(award_date), payment_start=min(period_from), payment_end=max(period_to), tot.amt.paid=sum(total), n=length(total))%>% 
   group_by(id, title, status, purpose, agency) %>% 
   mutate(type = type.map[type+1], 
          type_fed = type.map[type_fed+1], 
@@ -57,8 +57,12 @@ awards.05.tot$purpose[awards.05.tot$purpose%in%c("Extension/Public")] <- "Public
 awards.05.tot$purpose[awards.05.tot$purpose%in%c("Instruction/Training")] <- "Instruction"
 
 
-awards.05.tot <- awards.05.tot[,c("id", "title", "status", "type", "purpose", "agency", "account_num", "payment_start", "payment_end", "tot.amt.paid", "Role", "Investigator")]
-names(awards.05.tot) <- c("Award.Number", "Award.Title", "Award.Status", "Award.Type", "Activity.Type", "Sponsor", "Account", "Start.Date", "End.Date", "Award.Amount", "Role", "Investigator")
+awards.05.tot <- awards.05.tot[,c("id", "title", "status", "type", "purpose", 
+                                  "agency", "account_num", "record_start", "record_end", "tot.amt.paid", 
+                                  "Role", "Investigator")]
+names(awards.05.tot) <- c("Award.Number", "Award.Title", "Award.Status", "Award.Type", "Activity.Type", 
+                          "Sponsor", "Account", "Start.Date", "End.Date", "Award.Amount", 
+                          "Role", "Investigator")
 awards.05.tot$Source <- "Awards FY06 to FY10.csv"
 
 # 2011-2015 awards --------------------------------------------------------------

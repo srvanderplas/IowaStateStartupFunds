@@ -291,4 +291,69 @@ qplot(Award.Status, data=awards, color=I("black"), fill=I("grey")) + facet_wrap(
 
 awards$novalue <- c("No Monetary Value", "Monetary Value")[1+as.numeric(awards$Award.Amount>0)]
 qplot(Award.Status, fill=novalue, position="stack", data=awards, facets=~Source2) + theme_bw() + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Award Status by Grant Amount")
+
+
+ggplot(data=awards) + 
+  geom_histogram(aes(x=Start.Date, weight=Award.Amount), 
+                 color="black", fill="grey") + 
+  theme_bw() + 
+  scale_fill_discrete("Data Source") + xlab("Date") + ylab("Count") + ggtitle("Funding Span") + theme(legend.position="bottom")
+```
+
+
+
+
+# Merged Data
+
+```{r MergeDatasets, fig.width=8, fig.height=6}
+received.money <- awards %>% group_by(Investigator) %>% summarize(grant.received = sum(Award.Amount), n.awards = length(unique(Award.Number)))
+
+submitted.proposals <- prop %>% group_by(Investigator) %>% summarize(total.proposal.money = sum(Proposal.Amount), n.proposals = length(unique(Proposal.Number)), prop.fund.pct = mean(Proposal.Status=="Funded"))
+
+tmp <- merge(hires, received.money, by.x="Name", by.y="Investigator", all.x=T)
+tmp <- merge(tmp, submitted.proposals, by.x="Name", by.y="Investigator", all.x=T)
+
+tmp$grant.received[is.na(tmp$grant.received)] <- 0
+tmp$n.awards[is.na(tmp$n.awards)] <- 0
+tmp$total.proposal.money[is.na(tmp$total.proposal.money)] <- 0
+tmp$n.proposals[is.na(tmp$n.proposals)] <- 0
+tmp$prop.fund.pct[is.na(tmp$prop.fund.pct)] <- 0
+
+# head(tmp)
+
+qplot(Year, grant.received, data=tmp, geom="jitter", color=College, shape=College, size=I(4)) + 
+  scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V')) + 
+  guides(shape=guide_legend(ncol=4), color=guide_legend(ncol=4)) + 
+  xlab("Year Hired") + ylab("Total Grant $ Received") + ggtitle("Grant Receipts by Year of Hire") + 
+  theme_bw() +  theme(legend.position="bottom")
+
+
+qplot(Total.Cost, grant.received, data=tmp, geom="point", color=College, shape=College, size=I(4)) + 
+  geom_smooth(method="loess", inherit.aes=F, aes(x=Total.Cost, y=grant.received)) + 
+  scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V')) + 
+  guides(shape=guide_legend(ncol=4), color=guide_legend(ncol=4)) + 
+  scale_x_continuous(breaks=c(0, 30000, 100000, 300000, 2000000), 
+                     labels=c("$0", "$30K", "$100K", "$300K", "$2M"), 
+                     trans="sqrt", limits=c(0, 2000000)) + 
+  scale_y_continuous(breaks=c(0, 50000, 100000, 300000, 1000000, 10000000, 50000000), 
+                     labels=c("$0", "$50K", "$100K", "$300K", "$1M", "$10M", "$50M"), 
+                     trans="sqrt", limits=c(0, 50000000)) + 
+  xlab("Startup Package Cost") + ylab("Total Grant $ Received") + 
+  ggtitle("Startup Package Cost/Benefit in Grant Receipts") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical")
+
+
+qplot(Total.Cost, total.proposal.money, data=tmp, geom="point", color=College, shape=College, size=I(4)) + 
+  geom_smooth(method="loess", inherit.aes=F, aes(x=Total.Cost, y=total.proposal.money)) + 
+  scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V')) + 
+  guides(shape=guide_legend(ncol=4), color=guide_legend(ncol=4)) + 
+  scale_x_continuous(breaks=c(0, 30000, 100000, 300000, 2000000), 
+                     labels=c("$0", "$30K", "$100K", "$300K", "$2M"), 
+                     trans="sqrt", limits=c(0, 2000000)) + 
+  scale_y_continuous(breaks=c(0, 10000, 100000, 300000, 1000000, 10000000, 100000000, 300000000), 
+                     labels=c("$0", "$50K", "$100K", "$300K", "$1M", "$10M", "$100M", "$300M"), 
+                     trans="sqrt", limits=c(0, 300000000)) + 
+  xlab("Startup Package Cost") + ylab("Total $ in Grants Proposed") + 
+  ggtitle("Startup Package Cost/Benefit in Proposals") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical")
 ```

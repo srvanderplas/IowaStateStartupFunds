@@ -119,6 +119,8 @@ hires <- hires %>% group_by(Name) %>% arrange(Name, Source) %>% slice(1L)
 # Clean up
 rm(csvlist,tmp)
 
+# Fix names
+hires$Name <- str_to_upper(hires$Name)
 
 # Create variable for High impact hires, so that the (HIH) notation can be removed from the college
 hires$High.Impact <- grepl("HIH", hires$College)

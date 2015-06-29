@@ -56,6 +56,12 @@ awards.05.tot$purpose[awards.05.tot$purpose%in%c("Scholarship", "Fellowship")] <
 awards.05.tot$purpose[awards.05.tot$purpose%in%c("Extension/Public")] <- "Public Service"
 awards.05.tot$purpose[awards.05.tot$purpose%in%c("Instruction/Training")] <- "Instruction"
 
+# award title in upper case
+awards.05.tot$title <- toupper(awards.05.tot$title)
+
+# Fix award numbers
+awards.05.tot$id <- gsub("-00001", "", awards.05.tot$id)
+
 
 awards.05.tot <- awards.05.tot[,c("id", "title", "status", "type", "purpose", 
                                   "agency", "account_num", "record_start", "record_end", "tot.amt.paid", 
@@ -84,10 +90,26 @@ awards.11$Start.Date <- mdy(awards.11$Start.Date)
 awards.11$End.Date <- mdy(awards.11$End.Date)
 
 # Format investigator name as in other file
+awards.11$Investigator <- awards.11$Investigator %>%
+  str_replace(" {1,}", " ") %>%
+  str_replace("^DEL ", "DEL-") %>%
+  str_replace("^DE LA ", "DE-LA-") %>%
+  str_replace("^DE,? LA,? ([A-Z]*)", "DE-LA-\\1,") %>%
+  str_replace("^DE ", "DE-") %>%
+  str_replace("^VAN DER ", "VAN-DER-") %>%
+  str_replace("^VAN ", "VAN-") %>% 
+  str_replace("^VAN,? ([A-Z]*)", "VAN-\\1,") %>%
+  str_replace("^VAN-DER,? ([A-Z]*)", "VAN-DER-\\1")
 awards.11$Investigator <- str_replace(awards.11$Investigator, " ", ", ")
 
 # Remove awards without an investigator
 awards.11 <- subset(awards.11, nchar(Investigator)>1)
+
+# Fix award numbers
+awards.11$Award.Number <- gsub("-00001", "", awards.11$Award.Number)
+
+# Award title in caps
+awards.11$Award.Title <- toupper(awards.11$Award.Title)
 
 awards.11$Source <- "KC Investigator Award ALL 06072015.csv"
 
@@ -105,16 +127,80 @@ names(table(awards$Investigator))
 
 
 # Fixing names ------------------------------------------------------------------
+awards$Investigator <- awards$Investigator %>%
+  str_replace(" {1,}", " ") %>%
+  str_replace("^DE ", "DE-") %>%
+  str_replace("^DEL ", "DEL-") %>%
+  str_replace("^DE-LA ", "DE-LA-") %>%
+  str_replace("^VAN ", "VAN-") %>%
+  str_replace("^VAN-DER ", "VAN-DER-")
+
 invest.names <- as.data.frame(str_split_fixed(awards$Investigator, ",? ", 3))
 names(invest.names) <- c("Last", "First", "MI")
 awards$InvestigatorFull <- awards$Investigator
 awards$Investigator <- paste0(invest.names$Last, ", ", invest.names$First)
 # Fix some shortened/abbreviated names
-awards$Investigator <- str_replace(awards$Investigator, "TUGGLE, CHRIS(TOPHER)?", "TUGGLE, CHRISTOPHER")
-awards$Investigator <- str_replace(awards$Investigator, "THOEN, $", "THOEN, CHARLES")
-awards$Investigator <- str_replace(awards$Investigator, "\\.", "")
-awards$Investigator <- str_replace(awards$Investigator, "RUSSELL, ANNE", "RUSSELL, ANN")
-awards$Investigator <- str_replace(awards$Investigator, "LANNINGHAM-FOSTER, L", "LANNINGHAM-FOSTER, LORRAINE")
+awards$Investigator <- awards$Investigator %>% 
+  str_replace("DE-LA-", "DE LA ") %>%
+  str_replace("DE-", "DE ") %>%
+  str_replace("DEL-", "DEL ") %>%
+  str_replace("VAN-DER-", "VAN DER ") %>%
+  str_replace("VAN-", "VAN ") %>%
+  str_replace("DE, BRABANTER", "DE BRABANTER, KRIS") %>%
+  str_replace("DEL, CASTILLO", "DEL CASTILLO, LINA") %>%
+  str_replace("TUGGLE, CHRIS(TOPHER)?", "TUGGLE, CHRISTOPHER") %>%
+  str_replace("THOEN, $", "THOEN, CHARLES") %>% 
+  str_replace("\\.", "") %>%
+  str_replace("RUSSELL, ANNE", "RUSSELL, ANN") %>%
+  str_replace("LANNINGHAM-FOSTER, L$", "LANNINGHAM-FOSTER, LORRAINE") %>%
+  str_replace("BARTON, TOMMY", "BARTON, TOM") %>%
+  str_replace("BOSSELMAN, BOB", "BOSSELMAN, ROBERT") %>%
+  str_replace("BROSHAR, DONNIE", "BROSHAR, DON") %>%
+  str_replace("CACKLER, E$", "CACKLER, ELLS") %>%
+  str_replace("CHANDLER, CHRIS$", "CHANDLER, CHRISTOPHER") %>%
+  str_replace("CHEN, YU-CHE", "CHEN, YU") %>%
+  str_replace("CHUKHAREV-KHUDILAYNEN EV$", "CHUKHAREV-KHUDILAYNEN EVGENY") %>%
+  str_replace("CORREIA, ANA-PAULA", "CORREIA, ANA") %>%
+  str_replace("DAS, BISWARANJAN", "DAS, BISWA") %>%
+  str_replace("GANAPATHYSUBRAMANIAN, B$", "GANAPATHYSUBRAMANIAN, BASKAR") %>%
+  str_replace("GEOFFROY, GREG$", "GEOFFROY, GREGORY") %>%
+  str_replace("GOPALAKRISHNAN, KASTHURIR$", "GOPALAKRISHNAN, KASTHURIRA") %>%
+  str_replace("GRANSBERG, DOUG$", "GRANSBERG, DOUGLAS") %>%
+  str_replace("HARRIES, ADELA$", "HARRIES, ADELAIDA") %>%
+  str_replace("HAYNES, CINDY", "HAYNES, CYNTHIA") %>%
+  str_replace("JANE-TOPEL, JAY-LIN", "JANE, JAY-LIN") %>%
+  str_replace("KANWAR, RAMESHWAR", "KANWAR, RAMESH") %>%
+  str_replace("KENEALY, M$", "KENEALY, MICHAEL") %>%
+  str_replace("LAROCK, RICH$", "LAROCK, RICHARD") %>%
+  str_replace("LIEBMAN, MATT$", "LIEBMAN, MATTHEW") %>%
+  str_replace("MALLAPRAGADA, S$", "MALLAPRAGADA, SURYA") %>%
+  str_replace("MARTIN_X000D_\nMARTIN", "MARTIN") %>%
+  str_replace("MARTIN MARTIN", "MARTIN") %>%
+  str_replace("MILLLER, WYATT", "MILLER, WYATT") %>%
+  str_replace("NETTLETON, DAN$", "NETTLETON, DANIEL") %>%
+  str_replace("NG, SIU", "NG, SIU-HUNG") %>%
+  str_replace("OBRIEN, JASON", "O'BRIEN, JASON") %>%
+  str_replace("ONEAL, MATTHEW", "O'NEAL, MATTHEW") %>%
+  str_replace("PETERS, $", "PETERS, FRANK") %>%
+  str_replace("POWELL-COFFMAN, JO$", "POWELL-COFFMAN, JOANNE") %>%
+  str_replace("PROULX, STEPHEN", "PROULX, STEVEN") %>%
+  str_replace("RAMAN, DAVE", "RAMAN, DAVID") %>%
+  str_replace("RANDALL, JESSE", "RANDALL, JESSIE") %>%
+  str_replace("REFSNIDER, JEANINE", "REFSNIDER-STREBY, JEANINE") %>%
+  str_replace("REILLY, PETE$", "REILLY, PETER") %>%
+  str_replace("ROLLILNS, DERRICK", "ROLLINS, DERRICK") %>%
+  str_replace("RUMBEIHA, WILSON", "RUMBEITHA, WILSON") %>%
+  str_replace("SAFTIG, DAN$", "SAFTIG, DANIEL") %>%
+  str_replace("SONGER, J$", "SONGER, JOSEPH") %>%
+  str_replace("SOULEYRETTE, REG", "SOULEYRETTE, REGINALD") %>%
+  str_replace("THIPPESWAMY, THIMMASETTAP$", "THIPPESWAMY, THIMMASETTAPPA") %>%
+  str_replace("TRAVESSET-CASAS, ALEJANDR$", "TRAVESSET-CASAS, ALEJANDRO") %>%
+  str_replace("TRUJILLO, JESSE", "TRUJILLO, JESSIE") %>%
+  str_replace("VANDERLUGT, KRISTIN", "THOMAS-VANDERLUGT, KRISTIN") %>%
+  str_replace("WILLIAMS, R$", "WILLIAMS, RYAN") %>%
+  str_replace("YANG, XIAO$", "YANG, XIAO-BING") %>%
+  str_replace("ZHANG, WENSHEN$", "ZHANG, WENSHENG")
+
 rm(invest.names)
 
 # Cleaning up -------------------------------------------------------------------

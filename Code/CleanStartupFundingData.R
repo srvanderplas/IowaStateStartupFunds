@@ -113,19 +113,107 @@ hires <- do.call("rbind.fill", tmp) %>% arrange(Name, Source)
 col.order <- c("Name", "College", "Dept", "Start.Date", "Faculty.rank", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost", "Dept.Funding", "College.Funding", "PSI.Funding", "IPRT.Ames.Lab.Funding", "VPRED.Funding", "EVP.P.Funding", "Biotech.Funding", "Other.Funding", "Total.Funding", "Start.Date.mdy", "Beginning", "Ending", "Remarks", "Source")
 hires <- hires[,col.order] %>% arrange(Name, Source)
 
+
+
+# Fix Names
+hires$Name <- str_to_upper(hires$Name)
+hires$NameFull <- hires$Name
+hires$Name <- hires$Name %>%
+  str_replace(" {1,}", " ") %>% 
+  str_replace("BANG EUN JIN", "BANG, EUNJIN") %>%
+  str_replace("CHO, IN HO", "CHO, IN-HO") %>%
+  str_replace("KELLY, KRISTY A. COSTABILE", "COSTABILE, KRISTY K") %>%
+  str_replace("KIM,GAP-YOUNG", "KIM, GAP-YONG") %>%
+  str_replace("PEREIRA, PEREIRA, BEATRIZ DE CASTRO SEBASTIAO", "DE-CASTRO-PEREIRA, BEATRIZ") %>%
+  str_replace("RAMAN, D. RAJ", "RAMAN, RAJ") %>%
+  str_replace("WATANABE,OLENA", "WATANABE, OLENA") %>%
+  str_replace("THOMAS-VANDER LUGT", "THOMAS-VANDERLUGT") %>%
+  str_replace("TUCHIN, KIRIL", "TUCHIN, KIRILL") %>%
+  str_replace("VALENZUELA, M", "VALENZUELA-CASTRO, MARIA") 
+
+hire.names <- as.data.frame(str_split_fixed(hires$Name, ",? ", 3))
+names(hire.names) <- c("Last", "First", "MI")
+hires$Name <- paste0(hire.names$Last, ", ", hire.names$First)
+
+hires$Name <- hires$Name %>% 
+  str_replace(", $", "") %>%
+  str_replace("ARBUCKLE, J\\.", "ARBUCKLE, J") %>%
+  str_replace("BASMAJIAN$", "BASMAJIAN, CARLTON") %>%
+  str_replace("BELLAIRE$", "BELLAIRE, BRYAN") %>%
+  str_replace("BENSHLOMO$", "BEN-SHLOMO, GIL") %>%
+  str_replace("BLITVICH$", "BLITVICH, BRADLEY") %>%
+  str_replace("BREHAM-STECHER, BYRON", "BREHM-STECHER, BYRON") %>%
+  str_replace("BROWN, ERIC A\\.", "BROWN, ERIC") %>%
+  str_replace("BURNS, ROBERT T", "BURNS, ROBERT") %>%
+  str_replace("CAMPBELL$", "CAMPBELL, CHRISTINA") %>%
+  str_replace("CARLSON, STEVE", "CARLSON, STEVEN") %>%
+  str_replace("CHARRON KATHERINE MELLEN", "CHARRON, KATHERINE") %>%
+  str_replace("COOK, KENNETH L", "COOK, KENNETH") %>%
+  str_replace("CORDOBA, JUAN CARLOS", "CORDOBA, JUAN") %>% 
+  str_replace("DE, BRABANTER", "DE BRABANTER, KRIS") %>%
+  str_replace("DEL, CASTILLO", "DEL CASTILLO, LINA") %>%
+  str_replace("KIMBER$", "KIMBER, MICHAEL") %>%
+  str_replace("DE-CASTRO-PEREIRA, BEATRIZ", "DE CASTRO PEREIRA, BEATRIZ") %>%
+  str_replace("DAS, BISWAS", "DAS, BISWA") %>%
+  str_replace("GRIESDORN, TIM", "GRIESDORN, TIMOTHY") %>%
+  str_replace("HARPOLE, W", "HARPOLE, WILLIAM") %>%
+  str_replace("HEDLUND", "HEDLUND, CHERYL") %>%
+  str_replace("HERTZLER,STEVE", "HERTZLER, STEVE") %>%
+  str_replace("HOLME,, THOMAS", "HOLME, THOMAS") %>%
+  str_replace("HOLTKAMP$", "HOLTKAMP, DERALD") %>% 
+  str_replace("HONG, GONG$", "HONG, GONG-SOOG") %>%
+  str_replace("^JEFFREY$", "JEFFERY, NICHOLAS") %>%
+  str_replace("JONES, PHILIP", "JONES, PHILLIP") %>%
+  str_replace("MALDONADO, MARTA", "MALDONADO-PABON, MARTA") %>%
+  str_replace("MILLER$", "MILLER, CATHY") %>%
+  str_replace("MUELLER, DARREN", "MUELLER, DAREN") %>%
+  str_replace("OPRIESSNIG$", "OPRIESSNIG, TANJA") %>%
+  str_replace("RAJAGOPAL, LAKSHAM", "RAJAGOPAL, LAKSHMAN") %>%
+  str_replace("RIZO-ARBUCKLE, ELISA", "RIZO, ELISA") %>%
+  str_replace("STANLEY, MATHEW", "STANLEY, MATTHEW") %>%
+  str_replace("TERPENNEY, JANIS", "TERPENNY, JANIS") %>%
+  str_replace("THOMAS, NICOLAS", "THOMAS, NICHOLAS") %>%
+  str_replace("WINTER, MATT$", "WINTER, MATTHEW") %>%
+  str_replace("ZHANG, WENSHEN$", "ZHANG, WENSHENG") %>%
+  str_replace("VANLOOCKE, ANDY", "VANLOOCKE, ANDREW")
+
+hires$Faculty.rank <- hires$Faculty.rank %>%
+  str_replace("Professor", "Prof") %>% 
+  str_replace("Asst\\.", "Asst") %>%
+  str_replace("Adjunct", "Adj") %>%
+  str_replace("Assistant", "Asst") %>%
+  str_replace("Associate Prof", "Assoc Prof") %>%
+  str_replace("Associate$", "Assoc") %>%
+  str_replace("Assoc$", "Assoc Prof") %>%
+  str_replace("Asst$", "Asst Prof") %>%
+  str_replace("Assiociate", "Assoc") %>%
+  str_replace("Distinguished", "Distg") %>%
+  str_replace("Full Prof", "Prof") %>%
+  str_replace("/", " & ") %>%
+  str_replace("Prof\\.", "Prof") %>%
+  str_replace("Porf", "Prof") %>%
+  str_replace("[;,]{1,} ", " & ") %>%
+  str_replace("Prorfessor", "Prof") %>%
+  str_replace("[[:punct:]](.*)[[:punct:]]", "& \\1")
+
+hires$ProfRank <- str_extract(hires$Faculty.rank, "((Adj Assoc)|(Adj Asst)|(Adj)|(Affiliate)|(Assoc)|(Asst)|(Distg)|(^)|(&)) ?((Lecturer)|(Prof)|(Clinician))")
+hires$ProfRank <- hires$ProfRank %>% str_replace("^& ", "") %>% str_replace("(Adj (.*)?Prof)|(Lecturer)", "Adjunct/Lecturer")
+hires$ProfRank[is.na(hires$ProfRank)] <- "Other"
+
+
+hires$Admin <- str_detect(hires$Dept, "(College Admin)|(Director)") | str_detect(hires$Faculty.rank, "(Chair)|(Dir)|(VPR)|(Dean)|(Director)|(Provost)|(Prov)")
+
+col.order <- c(col.order[1:4], "ProfRank", "Admin", col.order[-c(1:5)], "Faculty.rank")
+
 # Remove duplicates
 hires <- hires %>% group_by(Name) %>% arrange(Name, Source) %>% slice(1L)
 
 # Clean up
 rm(csvlist,tmp)
 
-# Fix names
-hires$Name <- str_to_upper(hires$Name)
-
 # Create variable for High impact hires, so that the (HIH) notation can be removed from the college
 hires$High.Impact <- grepl("HIH", hires$College)
-col.order <- c(col.order[1:5], "High.Impact", col.order[-c(1:5)])
-
+col.order <- c(col.order[1:6], "High.Impact", col.order[-c(1:6)])
 # Format College appropriately
 hires$College <- hires$College %>%
   str_replace(fixed(" (HIH)"), "") %>%
@@ -158,7 +246,6 @@ dept.prog <- read.csv("Data/ISUDepartments.csv", stringsAsFactors = F)
 # Format Department appropriately
 hires$Dept.old <- hires$Dept
 hires$Extension <- str_detect(hires$Dept, "Ext(ension)?")
-hires$Admin <- str_detect(hires$Dept, "(College Admin)|(Director)") | str_detect(hires$Faculty.rank, "(VPR)|(Dean)|(Director)|(Provost)|(Prov)")
 hires$Dept <- hires$Dept %>%
   str_replace("(ACCTG?)|(Accounting)", "Acct") %>%
   str_replace("A[eE][rR]O? ?E", "AerE") %>%
@@ -237,7 +324,7 @@ rm(dept2.is.prog)
 hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?$") %>% str_replace("/", "")
 hires$Dept2 <- str_extract(hires$Dept, "[/](.*)$") %>% str_replace_all("/", "")
 
-col.order <- c(col.order[1:3], "Dept1", "Dept2", "Prog", "Extension", "Admin", col.order[-c(1:3)], "Dept.old")
+col.order <- c(col.order[1:3], "Dept1", "Dept2", "Prog", "Extension", col.order[-c(1:3)], "Dept.old")
 
 # Create  year variable for plotting
 hires$Year <- as.numeric(gsub("FY", "", hires$Start.Date)) + 2000
@@ -253,7 +340,6 @@ funding$Source <- str_replace(funding$Source, "\\.Funding", "")
 
 startup.package <- hires[,c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Prog", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Computer.peripherals", "Lab.space.equipment", "Graduate.assistants", "Summer.support", "Moving.expenses", "Research.support", "Other.Costs", "Total.Cost")]
 startup.package <- melt(startup.package, id.vars=c("Name", "College", "Year", "Dept", "Dept1", "Dept2", "Prog", "Extension", "Admin", "Start.Date", "Faculty.rank", "High.Impact", "Pay.base", "Starting.salary", "Total.Cost"), variable.name="Item", value.name="Amount")
-
 
 # Cleaning up -------------------------------------------------------------------
 rm(format.cols, stripExtraCols, dept.prog, col.order, fylist)

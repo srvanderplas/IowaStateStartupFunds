@@ -62,6 +62,7 @@ prop.05.tot$purpose[prop.05.tot$purpose%in%c("Instruction/Training")] <- "Instru
 prop.05.tot$purpose[prop.05.tot$purpose%in%c("Research", "Equipment")] <- "Research"
 prop.05.tot$purpose[prop.05.tot$purpose%in%c("Building")] <- "Operations & Maintenance"
 
+prop.05.tot$title <- toupper(prop.05.tot$title)
 
 prop.05.tot <- prop.05.tot[,c("id", "title", "status", "type", "purpose", 
                               "agency", "type_fed", "proposal_start", "proposal_end", "submit_datetime", 
@@ -91,10 +92,22 @@ prop.11$End.Date <- mdy(prop.11$End.Date)
 prop.11$Submit.Date <- mdy(prop.11$Submit.Date)
 
 # Format investigator name as in other file
+prop.11$Investigator <- prop.11$Investigator %>%
+  str_replace(" {1,}", " ") %>%
+  str_replace("^DEL ", "DEL-") %>%
+  str_replace("^DE LA ", "DE-LA-") %>%
+  str_replace("^DE,? LA,? ([A-Z]*)", "DE-LA-\\1,") %>%
+  str_replace("^DE ", "DE-") %>%
+  str_replace("^VAN DER ", "VAN-DER-") %>%
+  str_replace("^VAN,? ([A-Z]*)", "VAN-\\1,") %>%
+  str_replace("^VAN-DER,? ([A-Z]*)", "VAN-DER-\\1")
 prop.11$Investigator <- str_replace(prop.11$Investigator, ",? ", ", ")
 
 # Remove prop without an investigator
 prop.11 <- subset(prop.11, nchar(Investigator)>1)
+
+# Title in all caps
+prop.11$Proposal.Title <- toupper(prop.11$Proposal.Title)
 
 prop.11$Source <- "KC Investigator Proposal ALL 06072015.csv"
 
@@ -110,17 +123,81 @@ table(prop$Proposal.Status, prop$Source, useNA='ifany')
 table(prop$Investigator)
 
 # Fixing names ------------------------------------------------------------------
+prop$Investigator <- prop$Investigator %>%
+  str_replace(" {1,}", " ") %>%
+  str_replace("^DEL ", "DEL-") %>%
+  str_replace("^DE LA ", "DE-LA-") %>%
+  str_replace("^DE ", "DE-") %>%
+  str_replace("^VAN DER ", "VAN-DER-") %>%
+  str_replace("^VAN ", "VAN-")
+
 invest.names <- as.data.frame(str_split_fixed(prop$Investigator, ",? ", 3))
 names(invest.names) <- c("Last", "First", "MI")
 prop$InvestigatorFull <- prop$Investigator
 prop$Investigator <- paste0(invest.names$Last, ", ", invest.names$First)
 # Fix some shortened/abbreviated names
-prop$Investigator <- str_replace(prop$Investigator, "TUGGLE, CHRIS(TOPHER)?", "TUGGLE, CHRISTOPHER")
-prop$Investigator <- str_replace(prop$Investigator, "THOEN, $", "THOEN, CHARLES")
-prop$Investigator <- str_replace(prop$Investigator, "\\.", "")
-prop$Investigator <- str_replace(prop$Investigator, "RUSSELL, ANNE", "RUSSELL, ANN")
-prop$Investigator <- str_replace(prop$Investigator, "LANNINGHAM-FOSTER, L", "LANNINGHAM-FOSTER, LORRAINE")
-rm(invest.names)
+prop$Investigator <-  prop$Investigator %>% 
+  str_replace("DE-LA-", "DE LA ") %>%
+  str_replace("DE-", "DE ") %>%
+  str_replace("DEL-", "DEL ") %>%
+  str_replace("VAN-DER-", "VAN DER ") %>%
+  str_replace("VAN-", "VAN ") %>%
+  str_replace("DE, BRABANTER", "DE BRABANTER, KRIS") %>%
+  str_replace("DEL, CASTILLO", "DEL CASTILLO, LINA") %>%
+  str_replace("TUGGLE, CHRIS(TOPHER)?", "TUGGLE, CHRISTOPHER") %>%
+  str_replace("THOEN, $", "THOEN, CHARLES") %>% 
+  str_replace("\\.", "") %>%
+  str_replace("RUSSELL, ANNE", "RUSSELL, ANN") %>%
+  str_replace("LANNINGHAM-FOSTER, L$", "LANNINGHAM-FOSTER, LORRAINE") %>%
+  str_replace("BARTON, TOMMY", "BARTON, TOM") %>%
+  str_replace("BOSSELMAN, BOB", "BOSSELMAN, ROBERT") %>%
+  str_replace("BROSHAR, DONNIE", "BROSHAR, DON") %>%
+  str_replace("CACKLER, E$", "CACKLER, ELLS") %>%
+  str_replace("CHANDLER, CHRIS$", "CHANDLER, CHRISTOPHER") %>%
+  str_replace("CHEN, YU-CHE", "CHEN, YU") %>%
+  str_replace("CHUKHAREV-KHUDILAYNEN EV$", "CHUKHAREV-KHUDILAYNEN EVGENY") %>%
+  str_replace("CORREIA, ANA-PAULA", "CORREIA, ANA") %>%
+  str_replace("DAS, BISWARANJAN", "DAS, BISWA") %>%
+  str_replace("GANAPATHYSUBRAMANIAN, B$", "GANAPATHYSUBRAMANIAN, BASKAR") %>%
+  str_replace("GEOFFROY, GREG$", "GEOFFROY, GREGORY") %>%
+  str_replace("GOPALAKRISHNAN, KASTHURIR$", "GOPALAKRISHNAN, KASTHURIRA") %>%
+  str_replace("GRANSBERG, DOUG$", "GRANSBERG, DOUGLAS") %>%
+  str_replace("HARRIES, ADELA$", "HARRIES, ADELAIDA") %>%
+  str_replace("HAYNES, CINDY", "HAYNES, CYNTHIA") %>%
+  str_replace("JANE-TOPEL, JAY-LIN", "JANE, JAY-LIN") %>%
+  str_replace("KANWAR, RAMESHWAR", "KANWAR, RAMESH") %>%
+  str_replace("KENEALY, M$", "KENEALY, MICHAEL") %>%
+  str_replace("LAROCK, RICH$", "LAROCK, RICHARD") %>%
+  str_replace("LIEBMAN, MATT$", "LIEBMAN, MATTHEW") %>%
+  str_replace("MALLAPRAGADA, S$", "MALLAPRAGADA, SURYA") %>%
+  str_replace("MARTIN_X000D_\nMARTIN", "MARTIN") %>%
+  str_replace("MARTIN MARTIN", "MARTIN") %>%
+  str_replace("MILLLER, WYATT", "MILLER, WYATT") %>%
+  str_replace("NETTLETON, DAN$", "NETTLETON, DANIEL") %>%
+  str_replace("NG, SIU", "NG, SIU-HUNG") %>%
+  str_replace("OBRIEN, JASON", "O'BRIEN, JASON") %>%
+  str_replace("ONEAL, MATTHEW", "O'NEAL, MATTHEW") %>%
+  str_replace("POWELL-COFFMAN, JO$", "POWELL-COFFMAN, JOANNE") %>%
+  str_replace("PROULX, STEPHEN", "PROULX, STEVEN") %>%
+  str_replace("RAMAN, DAVE", "RAMAN, DAVID") %>%
+  str_replace("RANDALL, JESSE", "RANDALL, JESSIE") %>%
+  str_replace("REFSNIDER, JEANINE", "REFSNIDER-STREBY, JEANINE") %>%
+  str_replace("REILLY, PETE$", "REILLY, PETER") %>%
+  str_replace("ROLLILNS, DERRICK", "ROLLINS, DERRICK") %>%
+  str_replace("RUMBEIHA, WILSON", "RUMBEITHA, WILSON") %>%
+  str_replace("SAFTIG, DAN$", "SAFTIG, DANIEL") %>%
+  str_replace("SONGER, J$", "SONGER, JOSEPH") %>%
+  str_replace("SOULEYRETTE, REG", "SOULEYRETTE, REGINALD") %>%
+  str_replace("THIPPESWAMY, THIMMASETTAP$", "THIPPESWAMY, THIMMASETTAPPA") %>%
+  str_replace("TRAVESSET-CASAS, ALEJANDR$", "TRAVESSET-CASAS, ALEJANDRO") %>%
+  str_replace("TRUJILLO, JESSE", "TRUJILLO, JESSIE") %>%
+  str_replace("VANDERLUGT, KRISTIN", "THOMAS-VANDERLUGT, KRISTIN") %>%
+  str_replace("WILLIAMS, R$", "WILLIAMS, RYAN") %>%
+  str_replace("YANG, XIAO$", "YANG, XIAO-BING") %>%
+  str_replace("ZHANG, WENSHEN$", "ZHANG, WENSHENG")
+
+  
+
 
 # Cleaning up -------------------------------------------------------------------
 rm(var.cat, var.date, var.num, type.map, type_fed.map, prop.11, prop.05.tot, prop.05)

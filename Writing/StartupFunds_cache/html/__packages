@@ -1,0 +1,10 @@
+base
+knitr
+htmltools
+plyr
+dplyr
+stringr
+lubridate
+reshape2
+ggplot2
+scales

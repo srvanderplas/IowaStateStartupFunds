@@ -381,7 +381,7 @@ ggplot(aes(x=Total.Cost, fill=CollegeFac), data=tmp) +
 
 Using these quantile calculations, we then can examine total grants received as explained by years since hired. 
 
-```{r, fig.width=6, fig.height=8, dpi=300}
+```{r, fig.width=8, fig.height=6, dpi=300}
 ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, ProfRankFac!="Other" )) +
   geom_jitter(size=3) + 
   geom_smooth(method="lm", span=.5, se=F, fullrange=F, aes(x=YearsAtISU, y=grant.received)) + 
@@ -392,7 +392,8 @@ ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFa
   xlab("Years since hire") + ylab("Total Grant $ Received") + 
   ggtitle("Grant receipts based on hire date") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) +
+  scale_x_continuous(breaks=c(0, 5, 10))
 ```
 
 It is important to note several caveats at this point: first, hires are not separated out by faculty rank or position, so hires whose primary responsibilities include administrative work may command large startup packages but bring in relatively little grant funding. Additionally, different colleges have different funding structures: LAS, for instance, may need to provide lab startup funding for science based departments, but would not have to provide this funding for new hires in English or History. Finally, the x-axis shows years since hire, which does not necessarily translate to years at ISU (faculty hired in 2005 may have left in 2011 after receiving tenure, for example). 
@@ -417,6 +418,7 @@ ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFa
   xlab("Years since hire") + ylab("Total Grant $ Received") + 
   ggtitle("Grant receipts based on hire date") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
 ```
 

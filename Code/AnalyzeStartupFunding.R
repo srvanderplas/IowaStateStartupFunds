@@ -79,7 +79,7 @@ qplot(Total.Cost+1, grant.received+1, data=subset(tmp, Total.Cost>1000 & ProfRan
   ggtitle("Startup Package Cost/Benefit in Grant Receipts (FY06-13)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") +
   scale_x_continuous(breaks=c(10000, 100000, 1000000, 2000000), 
-                     labels=c("$10K", "$100K", "$1M", "$2M"), trans="log", limits=c(1000, 2000000)) + 
+                     labels=c("$10K", "$100K", "$1M", "$2M"), trans="log") + 
   scale_y_continuous(breaks=c(1, 50000, 300000, 1000000, 10000000, 50000000), 
                      labels=c("$0", "$50K",  "$300K", "$1M", "$10M", "$50M"), trans="log") 
 

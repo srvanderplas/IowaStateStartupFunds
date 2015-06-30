@@ -339,7 +339,7 @@ log_one_trans <- function() trans_new("log_one", function(x) log10(x+1), functio
 
 ```
 
-We'll begin by looking at the timeline - how many years at ISU are necessary before grant applications are successful? We split this by college and faculty rank (as we'd expect that full professors who are hired should be able to command grant money sooner than new faculty).
+We'll begin by looking at the timeline - how many years at ISU are necessary before grant applications are successful? We split this by college and faculty rank (as we'd expect that full professors who are hired should be able to command grant money sooner than new faculty). Subsequent graphs show data from hired professors (i.e. not adjuncts, affiliates, lecturers, or clinicians). 
 
 ```{r, fig.width=6, fig.height=8, dpi=300}
 ggplot(aes(x=YearsAtISU, y=grant.received, color=CollegeFac, shape=CollegeFac), data=subset(tmp, ProfRankFac!="Other" )) +

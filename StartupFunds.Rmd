@@ -305,55 +305,118 @@ ggplot(data=awards) +
 
 # Merged Data
 
-```{r MergeDatasets, fig.width=8, fig.height=6}
-received.money <- awards %>% group_by(Investigator) %>% summarize(grant.received = sum(Award.Amount), n.awards = length(unique(Award.Number)))
+```{r MergeDatasets, cache=F}
+received.money <- awards %>% 
+  group_by(Investigator) %>% 
+  summarize(grant.received = sum(Award.Amount), 
+            n.awards = length(unique(Award.Number)))
+received.money$grant.received[is.na(received.money$grant.received)] <- 0
 
-submitted.proposals <- prop %>% group_by(Investigator) %>% summarize(total.proposal.money = sum(Proposal.Amount), n.proposals = length(unique(Proposal.Number)), prop.fund.pct = mean(Proposal.Status=="Funded"))
+submitted.proposals <- prop %>% 
+  group_by(Investigator) %>% 
+  summarize(total.proposal.money = sum(Proposal.Amount), 
+            n.proposals = length(unique(Proposal.Number)), 
+            prop.fund.pct = mean(Proposal.Status=="Funded"))
+submitted.proposals$total.proposal.money[is.na(submitted.proposals$total.proposal.money)] <- 0
 
-tmp <- merge(hires, received.money, by.x="Name", by.y="Investigator", all.x=T)
-tmp <- merge(tmp, submitted.proposals, by.x="Name", by.y="Investigator", all.x=T)
-
+tmp <- merge(hires, received.money, by.x="Name", by.y="Investigator", all.x=T, all.y=F)
+tmp <- merge(tmp, submitted.proposals, by.x="Name", by.y="Investigator", all.x=T, all.y=F)
 tmp$grant.received[is.na(tmp$grant.received)] <- 0
-tmp$n.awards[is.na(tmp$n.awards)] <- 0
 tmp$total.proposal.money[is.na(tmp$total.proposal.money)] <- 0
-tmp$n.proposals[is.na(tmp$n.proposals)] <- 0
-tmp$prop.fund.pct[is.na(tmp$prop.fund.pct)] <- 0
 
-# head(tmp)
+tmp$ProfRankFac <- tmp$ProfRank %>% 
+  str_replace("(Adjunct/Lecturer)|(Affiliate Prof)|(Clinician)", "Other") %>%
+  str_replace("Distg ", "") %>%
+  factor(levels=c("Asst Prof", "Assoc Prof", "Prof", "Other"), labels=c("Assistant", "Associate", "Professor", "Other"))
 
-qplot(Year, grant.received, data=tmp, geom="jitter", color=College, shape=College, size=I(4)) + 
-  scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V')) + 
-  guides(shape=guide_legend(ncol=4), color=guide_legend(ncol=4)) + 
-  xlab("Year Hired") + ylab("Total Grant $ Received") + ggtitle("Grant Receipts by Year of Hire") + 
-  theme_bw() +  theme(legend.position="bottom")
+tmp$CollegeFac <- tmp$College %>% factor(labels=c("AGLS", "Bus", "Des", "Engr", "Hum Sci", "LAS", "Vet Med"))
 
+tmp$YearsAtISU <- 2015 - tmp$Year
 
-qplot(Total.Cost, grant.received, data=tmp, geom="point", color=College, shape=College, size=I(4)) + 
-  geom_smooth(method="loess", inherit.aes=F, aes(x=Total.Cost, y=grant.received)) + 
-  scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V')) + 
-  guides(shape=guide_legend(ncol=4), color=guide_legend(ncol=4)) + 
-  scale_x_continuous(breaks=c(0, 30000, 100000, 300000, 2000000), 
-                     labels=c("$0", "$30K", "$100K", "$300K", "$2M"), 
-                     trans="sqrt", limits=c(0, 2000000)) + 
-  scale_y_continuous(breaks=c(0, 50000, 100000, 300000, 1000000, 10000000, 50000000), 
-                     labels=c("$0", "$50K", "$100K", "$300K", "$1M", "$10M", "$50M"), 
-                     trans="sqrt", limits=c(0, 50000000)) + 
-  xlab("Startup Package Cost") + ylab("Total Grant $ Received") + 
-  ggtitle("Startup Package Cost/Benefit in Grant Receipts") +
-  theme_bw() + theme(legend.position="bottom", legend.direction="vertical")
+# Transformation - log(x+1) to deal with zero data 
+require(scales)
+log_one_trans <- function() trans_new("log_one", function(x) log10(x+1), function(x) 10^x-1, domain=c(0, Inf))
 
+```
 
-qplot(Total.Cost, total.proposal.money, data=tmp, geom="point", color=College, shape=College, size=I(4)) + 
-  geom_smooth(method="loess", inherit.aes=F, aes(x=Total.Cost, y=total.proposal.money)) + 
-  scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V')) + 
-  guides(shape=guide_legend(ncol=4), color=guide_legend(ncol=4)) + 
-  scale_x_continuous(breaks=c(0, 30000, 100000, 300000, 2000000), 
-                     labels=c("$0", "$30K", "$100K", "$300K", "$2M"), 
-                     trans="sqrt", limits=c(0, 2000000)) + 
-  scale_y_continuous(breaks=c(0, 10000, 100000, 300000, 1000000, 10000000, 100000000, 300000000), 
-                     labels=c("$0", "$50K", "$100K", "$300K", "$1M", "$10M", "$100M", "$300M"), 
-                     trans="sqrt", limits=c(0, 300000000)) + 
-  xlab("Startup Package Cost") + ylab("Total $ in Grants Proposed") + 
-  ggtitle("Startup Package Cost/Benefit in Proposals") +
+We'll begin by looking at the timeline - how many years at ISU are necessary before grant applications are successful? We split this by college and faculty rank (as we'd expect that full professors who are hired should be able to command grant money sooner than new faculty).
+
+```{r, fig.width=6, fig.height=8, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, color=CollegeFac, shape=CollegeFac), data=subset(tmp, ProfRankFac!="Other" )) +
+  geom_jitter(size=4, alpha=.5) + 
+  # geom_smooth(se=F, adjust=2) + 
+  scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V'), guide=F) +
+  scale_color_discrete(guide=F) + 
+  # guides(shape=guide_legend(ncol=7), color=guide_legend(ncol=7)) + 
+  facet_grid(CollegeFac~ProfRankFac, scales="free") + 
+  xlab("Years from Hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 1e3, 1e5, 1e7))
+```
+The most noticeable difference between colleges is that in engineering, assistant professors get grants about five years after they are hired, and it is very rare for professors at that stage in their careers not to get grant funding. This trend is present (though less pronounced) in Ag & Life Sciences and Human Sciences as well, though some assistant professors in those colleges seem to get funding much earlier in their careers (perhaps because of large grants given to groups of professors). In Liberal Arts and Sciences, grant funding does seem to increase with experience for some hires, but perhaps because LAS includes both arts (which are less grant-reliant) and sciences, this trend is less pronounced than in other colleges. 
+
+In order to examine the effect of startup funding on grant receipts over a career of variable duration, we will examine the distribution of startup funding by college, categorizing startup costs by the quartile (calculated for the hire's college). Below, vertical lines mark these quantiles
+
+```{r, fig.width=6, fig.height=6, dpi=300}
+tmp$YearsAtISUFac <- cut_number(tmp$YearsAtISU, n=4)
+
+startup.quantiles <- tmp %>% group_by(CollegeFac) %>% summarize(Q1=quantile(Total.Cost, .25, type=8), Q2=quantile(Total.Cost, .5, type=8), Q3=quantile(Total.Cost, .75, type=8), Q4=quantile(Total.Cost, 1, type=8)) %>% melt(id.vars=1, measure.vars=2:ncol(.), variable.name="Quantile", value.name="Total.Cost")
+
+tmp <- tmp %>% group_by(CollegeFac) %>% mutate(TotalCostFac = as.numeric(cut(Total.Cost, breaks=quantile(Total.Cost, probs=0:4/4))))
+tmp$TotalCostFac[is.na(tmp$TotalCostFac)] <- 1
+tmp$TotalCostFac <- factor(tmp$TotalCostFac, levels=1:4, labels=c("Startup $: Q1", "Startup $: Q2", "Startup $: Q3", "Startup $: Q4"))
+
+ggplot(aes(x=Total.Cost, fill=CollegeFac), data=tmp) + 
+  geom_density(aes(y=..density..), origin=0, color="black", trim=T) +
+  geom_vline(aes(xintercept=Total.Cost), data=startup.quantiles) + 
+  scale_fill_discrete(guide=F) + 
+  scale_x_continuous(trans='sqrt', breaks=c(1000, 25000, 50000, 100000, 250000, 500000, 1e6, 2e6), labels=c("1K", "25K", "50K", "100K", "250K", "500K", "1M", "2M"), limits=c(0, 2e6)) + 
+  facet_grid(CollegeFac~.) + 
+  ggtitle("Distribution of Startup Costs by College") +
+  xlab("Startup Package Cost") + ylab("Count") + 
+  # guides(fill=guide_legend(ncol=7)) + 
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical")
 ```
+
+Using these quantile calculations, we then can examine total grants received as explained by years since hired. 
+
+```{r, fig.width=6, fig.height=8, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, ProfRankFac!="Other" )) +
+  geom_jitter(size=3) + 
+  geom_smooth(method="lm", span=.5, se=F, fullrange=F, aes(x=YearsAtISU, y=grant.received)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~CollegeFac, ncol=4) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) 
+```
+
+It is important to note several caveats at this point: first, hires are not separated out by faculty rank or position, so hires whose primary responsibilities include administrative work may command large startup packages but bring in relatively little grant funding. Additionally, different colleges have different funding structures: LAS, for instance, may need to provide lab startup funding for science based departments, but would not have to provide this funding for new hires in English or History. Finally, the x-axis shows years since hire, which does not necessarily translate to years at ISU (faculty hired in 2005 may have left in 2011 after receiving tenure, for example). 
+
+Linear regression lines are provided here as (extremely) rough approximations; it may be useful to examine the right-most endpoint (rather than the entire line) as a prediction of total grant money received after 10 years at ISU. 
+
+With these caveats in mind, 
+
+* Startup funding in LAS is correlated with later grant funding; this is likely explained by departmental startup funding (and grant funding) norms. 
+* Startup funding in engineering is largely not predictive of grant receipts; after 10 years, hires with small startup packages receive approximately the same grant funding as hires with large startup packages. 
+* Startup funding in Human Sciences is correlated with later grant funding- this may again be a departmental norm situation (psychologists may require lab space and compete for NSF/NIH grants, where professors in the education department require fewer financial resources when hired and receive fewer grants.)
+* Grants are relatively rare in the business college.   
+
+Examining the LAS results in more detail, we see that departmental startup packages largely fall in the same quantiles. In Chemistry, Physics, BBMB, EEOB, Computer Science, Statistics, Economics, and Math, the career trajectory of grant funding suggests that the large startup packages are worthwhile investments; these disciplines are also largely in the top two quartiles for startup funding. Psychology is more of a mixed bag; many psychologists received large startup packages but have not received significant grant funding. Disciplines with more economical startup packages are also less likely to have faculty receiving large grants; this is likely due to discipline norms, rather than faculty quality. 
+```{r, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, CollegeFac=="LAS" & ProfRankFac!="Other" )) +
+  geom_jitter(size=3) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) 
+```
+

@@ -470,6 +470,7 @@ With these caveats in mind,
 * Startup funding in Human Sciences is correlated with later grant funding- this may again be a departmental norm situation (food scientists may require lab space and compete for NSF/NIH grants, where professors in the hospitality management department require fewer financial resources when hired and receive fewer grants.)
 * Grants are relatively rare in the business college.   
 
+## Individual Colleges: Grant Receipts and Startup Funding by Department
 Examining the LAS results in more detail, we see that departmental startup packages largely fall in the same quantiles. In Chemistry, Physics, BBMB, EEOB, Computer Science, Statistics, Economics, and Math, the career trajectory of grant funding suggests that the large startup packages are worthwhile investments; these disciplines are also largely in the top two quartiles for startup funding. Psychology is more of a mixed bag; many psychologists received large startup packages but have not received significant grant funding. Disciplines with more economical startup packages are also less likely to have faculty receiving large grants; this is likely due to discipline norms, rather than faculty quality. 
 ```{r YearsTotalCostGrantsLAS, fig.width=6, fig.height=6, dpi=300}
 ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, CollegeFac=="LAS" & ProfRankFac!="Other" )) +

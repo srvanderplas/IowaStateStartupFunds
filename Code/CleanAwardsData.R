@@ -53,8 +53,10 @@ awards.05.tot <- awards.05 %>%
 awards.05.tot$status <- "Closed"
 awards.05.tot$purpose <- str_to_title(awards.05.tot$purpose)
 awards.05.tot$purpose[awards.05.tot$purpose%in%c("Scholarship", "Fellowship")] <- "Scholarships & Fellowships"
-awards.05.tot$purpose[awards.05.tot$purpose%in%c("Extension/Public")] <- "Public Service"
+awards.05.tot$purpose[awards.05.tot$purpose%in%c("Extension/Public", "Dept/Admin Support", "Miscellaneous")] <- "Public Service"
 awards.05.tot$purpose[awards.05.tot$purpose%in%c("Instruction/Training")] <- "Instruction"
+awards.05.tot$purpose[awards.05.tot$purpose%in%c("Building")] <- "Operations & Maintenance"
+awards.05.tot$purpose[awards.05.tot$purpose%in%c("Research", "Equipment")] <- "Research"
 
 # award title in upper case
 awards.05.tot$title <- toupper(awards.05.tot$title)
@@ -88,6 +90,9 @@ awards.11[,which(names(awards.11)%in%var.num)] <- apply(awards.11[,which(names(a
 awards.11[,which(names(awards.11)%in%var.num)] <- apply(awards.11[,which(names(awards.11)%in%var.num)], 2, as.numeric)
 awards.11$Start.Date <- mdy(awards.11$Start.Date)
 awards.11$End.Date <- mdy(awards.11$End.Date)
+
+
+awards.11$Award.Type[awards.11$Award.Type%in%c("SFA Scholarship (no sponsored account)")] <- "SFA Scholarship"
 
 # Format investigator name as in other file
 awards.11$Investigator <- awards.11$Investigator %>%
@@ -203,5 +208,15 @@ awards$Investigator <- awards$Investigator %>%
 
 rm(invest.names)
 
+awards2 <- awards
+
+awards <- awards %>% 
+  group_by(Award.Number, Award.Title, Award.Status, Award.Type, Activity.Type, Sponsor, Account, Role, Investigator)  %>%
+  summarize(Start.Date=min(Start.Date), End.Date=max(End.Date), Award.Amount=sum(Award.Amount), Source=unique(Source))%>% 
+  arrange(Award.Number) %>%
+  filter(Award.Status!="Purged from KFS")
+
+
+
 # Cleaning up -------------------------------------------------------------------
-rm(var.cat, var.date, var.num, type.map, type_fed.map, awards.11, awards.05.tot, awards.05)
+rm(awards2, var.cat, var.date, var.num, type.map, type_fed.map, awards.11, awards.05.tot, awards.05)

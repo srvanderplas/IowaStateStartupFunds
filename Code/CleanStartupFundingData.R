@@ -230,15 +230,12 @@ hires$College <- hires$College %>%
   str_replace("^(ED)|(FCS)|(HS)|(CHS)$", "Hum Sci")%>%
   str_replace("^C?Hum Sci/Ext$", "Hum Sci")
 
-# For faculty with two colleges, create new rows, one for each college
-hires$College2 <- str_extract(hires$College, "[/](.*)$") %>% str_replace("/", "")
-hires$College1 <- str_extract(hires$College, "^[A-Za-z &]*/?$") %>% str_replace("/", "")
+# For faculty with two colleges, create a secondary college
 hires$College.old <- hires$College
-col.order <- c(col.order, "College.old")
-hires <- hires[,-which(names(hires)=="College")]
-hires <- melt(hires, measure.vars = c("College1", "College2"), variable.name = "College.Num", value.name = "College")
-hires <- hires[!is.na(hires$College),]
-hires <- hires[,col.order] %>% arrange(Name, Dept)
+hires$CollegeSecondary <- str_extract(hires$College.old, "[/](.*)$") %>% str_replace("/", "")
+hires$College <- str_extract(hires$College.old, "^[A-Za-z &]*/?") %>% str_replace("/", "")
+col.order <- c(col.order[1:2], "CollegeSecondary", col.order[-c(1:2)], "College.old")
+hires <- hires[,col.order] %>% arrange(Name, College, Dept)
 
 # Read in program list
 dept.prog <- read.csv("Data/ISUDepartments.csv", stringsAsFactors = F)
@@ -299,7 +296,7 @@ hires$Dept <- hires$Dept %>%
   str_replace("CCE ?E", "CCEE") %>%
   str_replace("S[Tt][Aa][Tt](istics)?", "Stat") %>%
   str_replace("VDPA[mM]", "VDPAM") %>%
-  str_replace("V[Pp][aA]?[tT][hH]", "VPath") %>%
+  str_replace("V*[Pp][aA]?[tT][hH]", "VPath") %>%
   str_replace("WLC", "WL&C") %>%
   str_replace(" & African American Studies", "/A&AAS") %>%
   str_replace("Music & Theatre", "M&T") %>%
@@ -309,19 +306,22 @@ hires$Dept <- hires$Dept %>%
   str_replace("LOMIS", "SCIS") %>%
   str_replace("Art", "A&VC") %>%
   str_replace("RISE", "SOE") %>%
-  str_replace(fixed("??"), "Acct") # Dr. Lamboy-Ruiz is an accounting professor according to business.iastate.edu.
+  str_replace(fixed("??"), "Acct") %>% # Dr. Lamboy-Ruiz is an accounting professor according to business.iastate.edu.
+  str_replace("EADM", "ECpE") %>%
+  str_replace("Animal Science", "AN SCI") %>%
+  str_replace("HHP", "Kin")
 
-hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?$") %>% str_replace("/", "")
+hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?") %>% str_replace("/", "")
 hires$Dept2 <- str_extract(hires$Dept, "[/](.*)$") %>% str_replace_all("/", "")
 
 dept2.is.prog <- hires$Dept2%in%dept.prog$Abbr[dept.prog$Type=="Prog"]
 
 hires$Prog <- NA
 hires$Prog[dept2.is.prog] <- hires$Dept2[dept2.is.prog]
-hires$Dept[dept2.is.prog] <- str_replace(hires$Dept, hires$Dept2, "") %>% str_replace("(^/)|(/$)", "")
+hires$Dept[dept2.is.prog] <- str_replace(hires$Dept[dept2.is.prog], hires$Dept2[dept2.is.prog], "") %>% str_replace("(^/)|(/$)", "")
 rm(dept2.is.prog)
 
-hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?$") %>% str_replace("/", "")
+hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?") %>% str_replace("/", "")
 hires$Dept2 <- str_extract(hires$Dept, "[/](.*)$") %>% str_replace_all("/", "")
 
 col.order <- c(col.order[1:3], "Dept1", "Dept2", "Prog", "Extension", col.order[-c(1:3)], "Dept.old")

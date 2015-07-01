@@ -27,8 +27,11 @@ library(scales)
 #   )
 # )
 # 
-knitr::opts_chunk$set(bootstrap.show.code=FALSE, bootstrap.show.output=FALSE, bootstrap.show.message=FALSE, warning=F, message=F, out.width="100%", cache=T, echo=F)
+knitr::opts_chunk$set(bootstrap.show.code=FALSE, bootstrap.show.output=FALSE, bootstrap.show.message=FALSE, warning=F, message=F, out.width="100%", cache=T, echo=F, dpi=300)
 knitr::opts_knit$set(root.dir="../../IowaStateStartupFunds/")
+
+# Transformation - log(x+1) to deal with zero data 
+log_one_trans <- function() trans_new("log_one", function(x) log10(x+1), function(x) 10^x-1, domain=c(0, Inf))
 ```
 
 # Introduction
@@ -65,7 +68,7 @@ The following information was taken from meeting notes (meetings on 6/4/2015 and
 - 2012 slowdown in research funding (may need to compare to NSF/NIH/USDA/DOD/DOE/Ames Lab funding levels)
 
 
-# Analysis
+# Analysis of Individual Datasets
 
 ## Office of the Vice President for Research Data
 
@@ -199,28 +202,60 @@ source("Code/CleanAwardsData.R")
 source("Code/CleanProposalsData.R")
 ```
 
+The following sections are intended to explore some of the limitations of the Proposal and Award datasets. They are not essential for understanding the subsequent analysis. 
 ### Proposals
 
 ```{r ProposalExploration}
-
 prop$Source2 <- factor(prop$Source, labels=c("FY06-FY10", "FY11-FY16"), levels=c("Proposals FY06 to FY10.csv", "KC Investigator Proposal ALL 06072015.csv"))
+```
 
-qplot(Activity.Type, data=prop, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Proposal Activities")
+Some categories of proposals occur in FY06-FY10 but not in FY11-FY16. 
+```{r ProposalActivity, fig.width=8, fig.height=4, dpi=300}
+qplot(Activity.Type, data=prop, color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) + 
+  xlab("Activity Type") + ylab("Proposal Count") + ggtitle("Proposal Activities") + 
+  theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1))
+```
 
-qplot(Proposal.Type, data=prop, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Proposal Type")
+We do not have proposal type data for FY06-FY10. This would be useful to have, but does not seem to be present in the database. 
+```{r ProposalTypes, fig.width=8, fig.height=4, dpi=300}
+qplot(Proposal.Type, data=prop, color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) + 
+  xlab("Proposal Type") + ylab("Proposal Count") + ggtitle("Proposal Type") + 
+  theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1))
+```
 
-qplot(Grant.Type, data=prop, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Funding Type")
+Similarly, we don't have information on the funding type for FY11-FY16. It may be useful to exclude Master Agreements, etc. from the data if no similar category exists in FY11-FY16. 
 
-qplot(Proposal.Status, fill=Source, position="stack", data=prop) + theme_bw() + 
-  theme(legend.position="bottom")  +
-  ggtitle("Proposal Status")
+```{r FundingTypes, fig.width=8, fig.height=4, dpi=300}
+qplot(Grant.Type, data=prop, color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) + 
+  xlab("Funding Type") + ylab("Proposal Count") + ggtitle("Funding Type") + 
+  theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1))
+```
 
+Other differences between the two proposal datasets are unsurprising, such as that there are no pending proposals from FY06-FY10. 
+```{r ProposalStatus, fig.width=8, fig.height=4, dpi=300}
+qplot(Proposal.Status, fill=Source2, position="stack", data=prop) +
+  scale_fill_discrete("Data Source") + 
+  xlab("Proposal Status") + ylab("Proposal Count") + ggtitle("Proposal Status") + 
+  theme_bw() + theme(legend.position="bottom")
+```
+
+Proposals are roughly evenly distributed over time, with a slight spike that corresponds to April - July 2009 (presumably, the American Recovery and Reinvestment Act proposals). 
+```{r ProposalsOverTime, fig.width=8, fig.height=4, dpi=300}
 prop.unique <- prop %>% group_by(Proposal.Number, Submit.Date, Source2) %>% summarise(ct=length(Proposal.Number))
 
-qplot(floor_date(Submit.Date, "month"), color=I("black"), fill=Source2, position="stack", data=prop.unique) + theme_bw() + theme(legend.position="bottom") + xlab("Submission Date") + ylab("Count") + ggtitle("Number of Proposals Submitted")
+ggplot() + 
+  geom_histogram(aes(x=floor_date(Submit.Date, "month"), fill=Source2), color="black", position="stack", data=prop.unique) + 
+  xlab("Submission Date") + ylab("Count") + ggtitle("Number of Proposals Submitted") + 
+  theme_bw() + theme(legend.position="bottom")
 
 rm(prop.unique)
+```
 
+Next, we consider the timeline for each proposal. Proposals have a submission date, a start date (presumably, when funding would begin), and an end date (when funding would cease). 
+```{r ProposalTimeline, fig.width=8, fig.height=4, dpi=300}
 prop.span <- melt(prop, id.vars = c("Proposal.Number", "Source2", "Proposal.Title"), measure.vars=c("Start.Date", "End.Date", "Submit.Date"), value.name = "Date", variable.name = "Proposal.Span")
 prop.span$Proposal.Span <- factor(prop.span$Proposal.Span, levels=c("Submit.Date", "Start.Date", "End.Date"))
 
@@ -232,41 +267,63 @@ ggplot(data=prop.span) +
   scale_x_datetime(limits=c(mdy("07012001"), mdy("07012026")), breaks=date_breaks("5 years")) + 
   scale_fill_discrete("Data Source") + xlab("Date") + ylab("Density") + ggtitle("Proposal Timeline") + 
   theme(legend.position="bottom") 
+```
+There is clearly some periodicity in the funding cycle (end dates, in particular) likely caused by differences between the academic year, government fiscal year, and calendar year. 
 
+Examining this from a slightly different perspective, we consider the difference between proposal submission dates and the start and end dates in those proposals. 
+```{r ProposalStartEnd, fig.width=8, fig.height=4, dpi=300}
 prop.span <- melt(prop, id.vars = c("Proposal.Number", "Source2", "Proposal.Title", "Submit.Date"), measure.vars=c("Start.Date", "End.Date"), value.name = "Date", variable.name = "Proposal.Span")
 prop.span$Proposal.Span <- factor(prop.span$Proposal.Span, levels=c("Start.Date", "End.Date"))
 prop.span$FundingLag <- with(prop.span, difftime(Date, Submit.Date, units="days")) 
 prop.span$FundingLag <- as.numeric(prop.span$FundingLag)/(365.25) # convert to years
 
 ggplot(data=prop.span) + 
-  geom_histogram(aes(x=FundingLag), fill="grey", color="black", binwidth=.125, inherit.aes=F) + 
-  facet_wrap(~Proposal.Span, scales="free_x") + 
+  geom_histogram(aes(x=FundingLag), fill="grey", color="black", binwidth=.25, inherit.aes=F) + 
+  facet_wrap(~Proposal.Span, scales="free") + 
   theme_bw() + 
   scale_x_continuous(limits=c(-1, 10), breaks=0:9) + 
-  xlab("Years from Proposal Submission Date") + ylab("Count") + ggtitle("Proposal Timeline") + 
+  xlab("Years from Proposal Submission Date") + ylab("Count") + ggtitle("Proposal Duration") + 
   theme(legend.position="bottom") 
 
-rm(prop.span)
+```
+`r round(sum(subset(prop.span, Proposal.Span=="Start.Date")$FundingLag<0, na.rm=T)/sum(!is.na(subset(prop.span, Proposal.Span=="Start.Date")$FundingLag), na.rm=T)*100)`% of proposals appear to start before they are submitted, and `r round(sum(subset(prop.span, Proposal.Span=="End.Date")$FundingLag<=0, na.rm=T)/sum(!is.na(subset(prop.span, Proposal.Span=="Start.Date")$FundingLag), na.rm=T)*100, 2)`% also end before they are submitted. 
 
+Looking at the funding duration directly, we see that proposals tend to provide funding over 1-5 years, though very few do extend 10 or more years into the future. A few proposals extend 100 years into the future; this situation occurs when an amount of money is donated for some purpose and can be used at any point. 
+```{r ProposalDuration, fig.width=8, fig.height=4, dpi=300}
 ggplot(data=prop) + 
   geom_histogram(aes(x=as.numeric(difftime(End.Date, Start.Date, units="days")/365.25)), 
-                 binwidth=.25, color="black", fill="grey") + 
+                 binwidth=.25, color="black", fill="grey", right=T) + 
   scale_x_continuous("Proposal Duration", limits=c(0, 10), breaks=0:10) + 
   ylab("Count") + ggtitle("Duration of Proposed Funding") + theme_bw() + 
   theme(legend.position="bottom") 
+```
 
+```{r ProposalCleanUp}
+rm(prop.span, prop.unique)
 ```
 
 ### Awards
 
 ```{r AwardExploration}
-
 awards$Source2 <- factor(awards$Source, labels=c("FY06-FY10", "FY11-FY16"), levels=c("Awards FY06 to FY10.csv", "KC Investigator Award ALL 06072015.csv"))
+```
 
-qplot(Activity.Type, data=awards, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Funding Activity Types")
-
-qplot(Award.Type, data=awards, color=I("black"), fill=I("grey")) + facet_grid(Source2~.) + theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Funding Award Type")
-
+Some award activity categories were created for FY11-16: Student Services, Institutional Support, and Academic Support. Other categories have been combined, for instance, the "Dept/Admin Support" category in FY06-FY10 has been combined into the Public Service category, but the overall funding level has declined significantly. 
+```{r AwardActivity, fig.width=6, fig.height=8, out.width="80%"}
+qplot(Activity.Type, data=awards, color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) + coord_flip() +
+  xlab("Activity Type") + ylab("Award Count") + ggtitle("Funded Award Activities") + 
+  theme_bw()  + theme(legend.position="bottom")
+```
+Similarly, some award types that were not tracked for FY06-FY10 are tracked in FY11-FY16. 
+```{r AwardType, fig.width=8, fig.height=8, out.width="100%"}
+qplot(Award.Type, data=subset(awards, !is.na(Award.Type)), color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) +  coord_flip() +
+  xlab("Award Type") + ylab("Award Count") + ggtitle("Award Type") + 
+  theme_bw()  + theme(legend.position="bottom")
+```
+Considering the timeline of awards, we find some interesting data artifacts:
+```{r AwardSpan, fig.width=6, fig.height=6}
 award.span <- melt(awards, id.vars = c("Award.Number", "Source2", "Award.Title"), measure.vars=c("Start.Date", "End.Date"), value.name = "Date", variable.name = "Award.Span")
 award.span$Award.Span <- factor(award.span$Award.Span, levels=c("Start.Date", "End.Date"))
 
@@ -279,33 +336,42 @@ ggplot(data=award.span) +
   scale_fill_discrete("Data Source") + xlab("Date") + ylab("Count") + ggtitle("Award Timeline")
 
 rm(award.span)
-
+```
+Some awards from FY11-16 started in FY05-FY10; this is likely because "Start.Date" and "End.Date" variables have slightly different meanings in the two datasets - in FY05-FY10, these dates indicate payement dates, where in FY11-FY16, these dates are based on the proposal itself. 
+```{r AwardLength, fig.width=6, fig.height=4}
 ggplot(data=awards) + 
-  geom_histogram(aes(x=as.numeric(difftime(End.Date, Start.Date, units="days"))/365.25), 
-                 color="black", fill="grey", binwidth=.25) + 
-  theme_bw() + 
+  geom_histogram(aes(x=as.numeric(difftime(End.Date, Start.Date, units="days"))/365.25, fill=Source2), 
+                 color="black", binwidth=.25) + 
   scale_x_continuous("Years of Funding", limits=c(-1, 10), breaks=0:9) + 
-  scale_fill_discrete("Data Source") + xlab("Date") + ylab("Count") + ggtitle("Funding Span") + theme(legend.position="bottom")
+  scale_fill_discrete("Data Source") + 
+  xlab("Date") + ylab("Count") + ggtitle("Funding Span") + 
+  theme(legend.position="bottom") + theme_bw()
+```
+The length of funding also differs between the two datasets as a result of the difference in start date calculations. 
 
-qplot(Award.Status, data=awards, color=I("black"), fill=I("grey")) + facet_wrap(~Source2) + theme_bw() + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Award Status")
-
-awards$novalue <- c("No Monetary Value", "Monetary Value")[1+as.numeric(awards$Award.Amount>0)]
-qplot(Award.Status, fill=novalue, position="stack", data=awards, facets=~Source2) + theme_bw() + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1)) + ggtitle("Award Status by Grant Amount")
-
-
-ggplot(data=awards) + 
-  geom_histogram(aes(x=Start.Date, weight=Award.Amount), 
-                 color="black", fill="grey") + 
-  theme_bw() + 
-  scale_fill_discrete("Data Source") + xlab("Date") + ylab("Count") + ggtitle("Funding Span") + theme(legend.position="bottom")
+Award status differs between the two files as well; this is to be expected (more Active awards should be in the FY11-FY16 data, for instance). "Final" and "Executed" awards are present in FY11-FY16; I am currently tracking down what those statuses imply. 
+```{r AwardStatus, fig.width=6, fig.height=4}
+ggplot(data=awards) +  
+  geom_histogram(aes(x=Award.Status), color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2) + coord_flip() + 
+  xlab("Award Status") + ylab("Count") + ggtitle("Award Status") + 
+  theme_bw() + theme(legend.position="bottom")
 ```
 
+Finally, we explore the amount of grant funding by year. Grants spanning many years are allocated to the midpoint of the funding range. 
+```{r AwardAmounts, fig.width=6, fig.height=4}
+ggplot(data=awards) + 
+  geom_histogram(aes(x=rowMeans(cbind(decimal_date(Start.Date), decimal_date(End.Date))), weight=Award.Amount), 
+                 color="black", fill="grey") + 
+  scale_fill_discrete("Data Source") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 1e3, 1e5, 1e7, 1e9, 1e11)) +
+  # scale_x_datetime(limits=mdy("01-01-2004", "01-01-2016")) + 
+  xlab("Date") + ylab("Amount of Funding ($)") + ggtitle("Total Award Funding Over Time")+ 
+  theme_bw() + theme(legend.position="bottom")
+```
 
-
-
-# Merged Data
-
-```{r MergeDatasets, cache=F}
+# Analysis of Merged Data
+```{r MergeDatasetsSetup, cache=F}
 received.money <- awards %>% 
   group_by(Investigator) %>% 
   summarize(grant.received = sum(Award.Amount), 
@@ -333,15 +399,20 @@ tmp$CollegeFac <- tmp$College %>% factor(labels=c("AGLS", "Bus", "Des", "Engr", 
 
 tmp$YearsAtISU <- 2015 - tmp$Year
 
-# Transformation - log(x+1) to deal with zero data 
-require(scales)
-log_one_trans <- function() trans_new("log_one", function(x) log10(x+1), function(x) 10^x-1, domain=c(0, Inf))
+tmp$YearsAtISUFac <- cut_number(tmp$YearsAtISU, n=4)
 
+# Quartiles for startup funding, by college
+startup.quantiles <- tmp %>% group_by(CollegeFac) %>% summarize(Q1=quantile(Total.Cost, .25, type=8), Q2=quantile(Total.Cost, .5, type=8), Q3=quantile(Total.Cost, .75, type=8), Q4=quantile(Total.Cost, 1, type=8)) %>% melt(id.vars=1, measure.vars=2:ncol(.), variable.name="Quantile", value.name="Total.Cost")
+
+# Rank individual faculty startup packages by the quartile of their respective college. 
+tmp <- tmp %>% group_by(CollegeFac) %>% mutate(TotalCostFac = as.numeric(cut(Total.Cost, breaks=quantile(Total.Cost, probs=0:4/4))))
+tmp$TotalCostFac[is.na(tmp$TotalCostFac)] <- 1
+tmp$TotalCostFac <- factor(tmp$TotalCostFac, levels=1:4, labels=c("Startup $: Q1", "Startup $: Q2", "Startup $: Q3", "Startup $: Q4"))
 ```
 
 We'll begin by looking at the timeline - how many years at ISU are necessary before grant applications are successful? We split this by college and faculty rank (as we'd expect that full professors who are hired should be able to command grant money sooner than new faculty). Subsequent graphs show data from hired professors (i.e. not adjuncts, affiliates, lecturers, or clinicians). 
 
-```{r, fig.width=6, fig.height=8, dpi=300}
+```{r YearsAtISUGrants, fig.width=6, fig.height=8, dpi=300}
 ggplot(aes(x=YearsAtISU, y=grant.received, color=CollegeFac, shape=CollegeFac), data=subset(tmp, ProfRankFac!="Other" )) +
   geom_jitter(size=4, alpha=.5) + 
   # geom_smooth(se=F, adjust=2) + 
@@ -358,15 +429,7 @@ The most noticeable difference between colleges is that in engineering, assistan
 
 In order to examine the effect of startup funding on grant receipts over a career of variable duration, we will examine the distribution of startup funding by college, categorizing startup costs by the quartile (calculated for the hire's college). Below, vertical lines mark these quantiles
 
-```{r, fig.width=6, fig.height=6, dpi=300}
-tmp$YearsAtISUFac <- cut_number(tmp$YearsAtISU, n=4)
-
-startup.quantiles <- tmp %>% group_by(CollegeFac) %>% summarize(Q1=quantile(Total.Cost, .25, type=8), Q2=quantile(Total.Cost, .5, type=8), Q3=quantile(Total.Cost, .75, type=8), Q4=quantile(Total.Cost, 1, type=8)) %>% melt(id.vars=1, measure.vars=2:ncol(.), variable.name="Quantile", value.name="Total.Cost")
-
-tmp <- tmp %>% group_by(CollegeFac) %>% mutate(TotalCostFac = as.numeric(cut(Total.Cost, breaks=quantile(Total.Cost, probs=0:4/4))))
-tmp$TotalCostFac[is.na(tmp$TotalCostFac)] <- 1
-tmp$TotalCostFac <- factor(tmp$TotalCostFac, levels=1:4, labels=c("Startup $: Q1", "Startup $: Q2", "Startup $: Q3", "Startup $: Q4"))
-
+```{r TotalCostQuartiles, fig.width=6, fig.height=6, dpi=300}
 ggplot(aes(x=Total.Cost, fill=CollegeFac), data=tmp) + 
   geom_density(aes(y=..density..), origin=0, color="black", trim=T) +
   geom_vline(aes(xintercept=Total.Cost), data=startup.quantiles) + 
@@ -381,7 +444,7 @@ ggplot(aes(x=Total.Cost, fill=CollegeFac), data=tmp) +
 
 Using these quantile calculations, we then can examine total grants received as explained by years since hired. 
 
-```{r, fig.width=8, fig.height=6, dpi=300}
+```{r YearsTotalCostGrantsByCollege, fig.width=8, fig.height=6, dpi=300}
 ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, ProfRankFac!="Other" )) +
   geom_jitter(size=3) + 
   geom_smooth(method="lm", span=.5, se=F, fullrange=F, aes(x=YearsAtISU, y=grant.received)) + 
@@ -404,11 +467,11 @@ With these caveats in mind,
 
 * Startup funding in LAS is correlated with later grant funding; this is likely explained by departmental startup funding (and grant funding) norms. 
 * Startup funding in engineering is largely not predictive of grant receipts; after 10 years, hires with small startup packages receive approximately the same grant funding as hires with large startup packages. 
-* Startup funding in Human Sciences is correlated with later grant funding- this may again be a departmental norm situation (psychologists may require lab space and compete for NSF/NIH grants, where professors in the education department require fewer financial resources when hired and receive fewer grants.)
+* Startup funding in Human Sciences is correlated with later grant funding- this may again be a departmental norm situation (food scientists may require lab space and compete for NSF/NIH grants, where professors in the hospitality management department require fewer financial resources when hired and receive fewer grants.)
 * Grants are relatively rare in the business college.   
 
 Examining the LAS results in more detail, we see that departmental startup packages largely fall in the same quantiles. In Chemistry, Physics, BBMB, EEOB, Computer Science, Statistics, Economics, and Math, the career trajectory of grant funding suggests that the large startup packages are worthwhile investments; these disciplines are also largely in the top two quartiles for startup funding. Psychology is more of a mixed bag; many psychologists received large startup packages but have not received significant grant funding. Disciplines with more economical startup packages are also less likely to have faculty receiving large grants; this is likely due to discipline norms, rather than faculty quality. 
-```{r, fig.width=6, fig.height=6, dpi=300}
+```{r YearsTotalCostGrantsLAS, fig.width=6, fig.height=6, dpi=300}
 ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, CollegeFac=="LAS" & ProfRankFac!="Other" )) +
   geom_jitter(size=3) + 
   scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
@@ -422,3 +485,96 @@ ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFa
   scale_x_continuous(breaks=c(0, 5, 10))
 ```
 
+By comparison, the College of Engineering is fairly consistent; some departments have more startup funding (MSE, CBE), but overall, grant receipts are largely similar (though there is not sufficient data for Ag & Biosystems Engineering to determine whether that department receives grants at the same rate as other departments). Grant funding may increase slightly over the course of a career (there are increases in AerE, MSE, and ME that are fairly consistent). After 2 years, most hires will have received at least $100,000 in grant funding, and many hires will have received at least one million in cumulative grants after 5-6 years. Startup funding does not seem to affect these trends in a significant way, except that more recent hires seem more likely to receive large startup packages, and are less likely to have received grant money at this point in their careers.  
+```{r YearsTotalCostGrantEngr, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, CollegeFac=="Engr" & ProfRankFac!="Other" )) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```
+
+Examining the College of Agriculture & Life Sciences, we find again that different departments have different startup funding resources, but that within a department, startup funding does not seem to greatly predict later grant receipts. 
+```{r YearsTotalCostGrantAGLS, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, CollegeFac=="AGLS" & ProfRankFac!="Other" & Dept1!="Stat")) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```
+
+Examining the College of Human Sciences, we find again that different departments have different startup funding resources; Food Science and Human Nutrition in particular tends to have more startup funding than other departments, while the School of Education has a uniquely time-dependent startup funding allocation - hires from FY06-FY10 are typically in the first quartile of startup package funding, while hires from FY11-FY13 are typically in the second quadrant, and hires from FY13-FY15 are typically in the third quadrant. In the school of education, at least, startup funding (relative to others hired at approximately the same time) seems to be associated with a higher probability of grant receipts, at least in part because those hired as Associate and Full professors (circled values in the graph) can command higher startup packages and seem somewhat more likely to receive grant funding. 
+```{r YearsTotalCostGrantHumSci, fig.width=6, fig.height=6, dpi=300}
+tmp$YearsAtISUjit <- jitter(tmp$YearsAtISU)
+ggplot(aes(x=YearsAtISUjit, y=grant.received), data=subset(tmp, CollegeFac=="Hum Sci" & ProfRankFac!="Other")) +
+  geom_point(aes(shape=TotalCostFac, color=TotalCostFac), size=3) +
+  geom_point(aes(color=TotalCostFac), data=subset(tmp, CollegeFac=="Hum Sci" & !ProfRankFac%in%c("Assistant", "Other")), size=5, shape=1, show_guide=F) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+tmp <- tmp[,-which(names(tmp)=="YearsAtISUjit")]
+```
+
+Examining the College of Veterinary Medicine, we find great differences in grant receipts between departments; grants are almost unheard of in Veterinary Pathology, but are reasonably common in Veterinary Diagnostic and Production Animal Medicine. In this college, startup funding does seem to somewhat correlate with grant receipts; the most expensive startup packages typically receive grant funding, particularly in the BMS, VCS, and VDPAM departments. 
+```{r YearsTotalCostGrantVetMed, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, CollegeFac=="Vet Med" & ProfRankFac!="Other")) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```
+
+Examining the College of Business, we find that grant funding is so rare in business that it would be nearly impossible to draw meaningful conclusions about the relationship between startup funding and grants. Additionally complicating the issue, funding for startup packages seems to be higher for hires in FY11-FY16 than in FY06-FY10. 
+```{r YearsTotalCostGrantBus, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, CollegeFac=="Bus" & ProfRankFac!="Other")) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```
+
+
+Examining the College of Design, we find again that startup costs do not seem to significantly influence later grant receipts once we account for department and time since hiring. 
+```{r YearsTotalCostGrantDes, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(tmp, CollegeFac=="Des" & ProfRankFac!="Other")) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```

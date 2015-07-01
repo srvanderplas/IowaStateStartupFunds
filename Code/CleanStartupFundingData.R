@@ -309,7 +309,8 @@ hires$Dept <- hires$Dept %>%
   str_replace(fixed("??"), "Acct") %>% # Dr. Lamboy-Ruiz is an accounting professor according to business.iastate.edu.
   str_replace("EADM", "ECpE") %>%
   str_replace("Animal Science", "AN SCI") %>%
-  str_replace("HHP", "Kin")
+  str_replace("HHP", "Kin") %>%
+  str_replace("HistUSLS", "Hist/USLS")
 
 hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?") %>% str_replace("/", "")
 hires$Dept2 <- str_extract(hires$Dept, "[/](.*)$") %>% str_replace_all("/", "")

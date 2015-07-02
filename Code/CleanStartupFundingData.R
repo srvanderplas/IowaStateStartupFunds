@@ -1,9 +1,9 @@
 # R libraries -------------------------------------------------------------------
-library(plyr) # for rbind.fill function
-library(dplyr) # for %>% operator
 library(stringr) # for string manipulation
 library(lubridate) # for date manipulation
 library(reshape2) # for reshaping data
+library(plyr) # for rbind.fill function
+library(dplyr) # for %>% operator
 # -------------------------------------------------------------------------------
 
 # Data --------------------------------------------------------------------------

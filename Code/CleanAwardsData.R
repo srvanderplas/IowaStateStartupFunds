@@ -1,9 +1,9 @@
 # R libraries -------------------------------------------------------------------
-library(plyr) # for rbind.fill function
-library(dplyr) # for %>% operator
 library(stringr) # for string manipulation
 library(lubridate) # for date manipulation
 library(reshape2) # for reshaping data
+library(plyr) # for rbind.fill function
+library(dplyr) # for %>% operator
 # -------------------------------------------------------------------------------
 
 # Data --------------------------------------------------------------------------
@@ -41,7 +41,7 @@ type_fed.map <- c("", "Agriculture (USDA)", "Defense", "HHS", "NASA", "Commerce"
 # Create awards total by PI
 awards.05.tot <- awards.05 %>% 
   group_by(id, title, status, type, type_fed, purpose, agency, account_num, Investigator, principal)  %>%
-  summarize(record_start=min(award_date), record_end=max(award_date), payment_start=min(period_from), payment_end=max(period_to), tot.amt.paid=sum(total), n=length(total))%>% 
+  summarise(record_start=min(award_date), record_end=max(award_date), payment_start=min(period_from), payment_end=max(period_to), tot.amt.paid=sum(total), n=length(total))%>% 
   group_by(id, title, status, purpose, agency) %>% 
   mutate(type = type.map[type+1], 
          type_fed = type.map[type_fed+1], 
@@ -213,8 +213,14 @@ awards2 <- awards
 awards <- awards %>% 
   group_by(Award.Number, Award.Title, Award.Status, Award.Type, Activity.Type, Sponsor, Account, Role, Investigator)  %>%
   summarize(Start.Date=min(Start.Date), End.Date=max(End.Date), Award.Amount=sum(Award.Amount), Source=unique(Source))%>% 
-  arrange(Award.Number) %>%
-  filter(Award.Status!="Purged from KFS")
+  arrange(Award.Number)
+  
+awards$Award.Status <- awards$Award.Status %>% 
+  str_replace("Purged from KFS", "Closed") %>% 
+  str_replace("Final", "Closed")
+
+awards <- filter(awards, Award.Status != "Executed")
+
 
 
 

@@ -175,7 +175,8 @@ hires$Name <- hires$Name %>%
   str_replace("THOMAS, NICOLAS", "THOMAS, NICHOLAS") %>%
   str_replace("WINTER, MATT$", "WINTER, MATTHEW") %>%
   str_replace("ZHANG, WENSHEN$", "ZHANG, WENSHENG") %>%
-  str_replace("VANLOOCKE, ANDY", "VANLOOCKE, ANDREW")
+  str_replace("VANLOOCKE, ANDY", "VANLOOCKE, ANDREW") %>%
+  str_replace("ALEXANDEER", "ALEXANDER")
 
 hires$Faculty.rank <- hires$Faculty.rank %>%
   str_replace("Professor", "Prof") %>% 

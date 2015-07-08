@@ -45,49 +45,80 @@ reset.ip <- function(requests){
 
 requests <<- 0
 
+id.robot <- function(counter, serv){
+  if(grepl("not a robot", as.character(serv$getPageSource()))){
+    if(counter < 5){
+      system("xdg-open 'https://www.youtube.com/watch?v=GWXLPu8Ky9k'")
+      Sys.sleep(60)
+      return(id.robot(counter + 1, serv))
+    } else {
+      return(TRUE)
+    }
+  } else {
+    return(FALSE)
+  }
+}
+
+id.scriptblock <- function(counter, serv){
+  if(grepl("We're sorry", as.character(serv$getPageSource()))){
+    message("Timed Out on this IP")
+    new.ip()
+    message("Deleting Cookies")
+    serv$deleteAllCookies()
+    try(serv$navigate(serv$serverURL))
+    
+    # Check for robot message
+    robot <- id.robot(0, serv)
+    
+    if(robot){ # Failure
+      message("Prove you are human to Google first")
+      return(TRUE)
+    } else { # Not a robot, therefore can continue
+      setupScholar(serv)
+      return(id.scriptblock(counter, serv))
+    }
+  } else { # No scriptblock detected
+    return(FALSE)
+  }
+}
+
+
 seleniumScrape <- function(serv, author,  institution="Iowa State University"){
   
   googleScholarUrl <- "http://scholar.google.com"
   
   # putting together the search-URL:
-  query <- sprintf("author:'%s' '%s'", author, institution)
+  query <- sprintf('author:"%s" "%s"&as_vis=1&hl=en&as_sdt=1,5&as_ylo=2005', author, institution)
   resultsURL <- paste0(
     "http://scholar.google.com/scholar?q=",
     query %>%
       str_replace_all(pattern=" ", replacement="%20"))
   
+#   message("Deleting Cookies")
+#   serv$deleteAllCookies()
+
   # get content and parse it:
   err <- try(serv$navigate(resultsURL))
   
-  counter <- 0
-  
-  while(is.character(err) & counter<3){
-    # If captcha:
-    captcha <- try(serv$findElement("css selector", "#gs_captcha_ccl"))
-    if(is.character(captcha)){
-      captcha <- try(serv$findElement("css selector", "#captcha"))
-    }
-    if(is.character(captcha)){
-      warning("Request failed without captcha.")
-      Sys.sleep(time = 60)
-      new.ip()
-    } else {
-      system("xdg-open 'https://www.youtube.com/watch?v=GWXLPu8Ky9k'")
-      message("Captcha detected! Complete the captcha, then press [enter] to continue")
-      number <- scan(n=1)
-    }
-    counter <- counter + 1
-    err <- try(serv$navigate(resultsURL))
-    requests <<- reset.ip(requests)
+  if(id.robot(0,serv)){
+    return(data.frame(author=author, gslink = "ROBOT-ERROR", link=NA, bibtex=NA))
   }
-
+  
+  if(id.scriptblock(0,serv)){
+    return(data.frame(author=author, gslink = "SCRIPTBLOCK-ERROR", link=NA, bibtex=NA))
+  }
+  
+  if(!grepl("BibTeX", as.character(serv$getPageSource()))){
+    setupScholar(serv)
+  }
+  
+  pageno <- try(serv$findElement(using='css selector', value="#gs_ab_md")$getElementText()[[1]][1]%>% str_replace_all("(About )|( results.*$)", "") %>% as.numeric())
+  
   requests <<- reset.ip(requests)
   
-  if(is.character(err)){
+  if(is.character(err) | is.character(pageno)){
     return(data.frame(author=author, gslink = "ERROR", link=NA, bibtex=NA))
   }
-  
-  pageno <- serv$findElement(using='css selector', value="#gs_ab_md")$getElementText()[[1]][1]%>% str_replace_all("(About )|( results.*$)", "") %>% as.numeric()
   
   links <- serv$findElements(using='css selector', value="#gs_n > center:nth-child(1) > table:nth-child(1) > tbody:nth-child(1) > tr:nth-child(1) a") %>% lapply(FUN=function(x) x$getElementAttribute("href"))
   if(length(links)>0){
@@ -101,11 +132,17 @@ seleniumScrape <- function(serv, author,  institution="Iowa State University"){
   for(i in 1:length(links)){
     if(i>1){
       serv$navigate(links[i])
+      requests <<- reset.ip(requests)
     }
-    requests <<- reset.ip(requests)
+    
     
     h1 <- serv$findElements(using='css selector', value="div.gs_ri a.gs_nta.gs_nph")
     h2 <- serv$findElements(using='css selector', value="div.gs_ri > h3.gs_rt")
+    
+    if(length(h1)==0){
+      setupScholar(serv)
+      h1 <- serv$findElements(using='css selector', value="div.gs_ri a.gs_nta.gs_nph")
+    } 
     
     if(length(h1)>0){
       bibtexlinks <- c(bibtexlinks, lapply(h1, function(x) x$getElementAttribute("href")[[1]][1]) %>% unlist())
@@ -169,10 +206,61 @@ citations <- hires[1:5,] %>% group_by(Name) %>%  do(seleniumScrape(serv, .$Name,
 citations <- rbind(citations, 
                    hires[6:10,] %>% group_by(Name) %>% do(seleniumScrape(serv, .$Name, "Iowa State University")))
 save(citations, file="Citations.RData")
-
-load("Citations.RData")
-citationList <- hires[11,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-
-
 serv$close()
 
+serv$open()
+serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
+load("Citations.RData")
+citationList <- hires[11:15,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
+citations <- rbind(citations, citationList)
+save(citations, file="Citations.RData")
+serv$close()
+
+serv$open()
+serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
+load("Citations.RData")
+citationList <- hires[16:20,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
+citations <- rbind(citations, citationList)
+save(citations, file="Citations.RData")
+serv$close()
+
+
+serv$open()
+serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
+load("Citations.RData")
+citationList <- hires[21:25,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
+citations <- rbind(citations, citationList)
+save(citations, file="Citations.RData")
+serv$close()
+
+serv$open()
+serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
+load("Citations.RData")
+citationList <- hires[25:30,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
+citations <- rbind(citations, citationList)
+save(citations, file="Citations.RData")
+serv$close()
+
+serv$open()
+serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
+load("Citations.RData")
+citationList <- hires[31:40,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
+citations <- rbind(citations, citationList)
+save(citations, file="Citations.RData")
+serv$close()
+
+serv$open()
+serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
+load("Citations.RData")
+citationList <- hires[41:50,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
+citations <- rbind(citations, citationList)
+save(citations, file="Citations.RData")
+serv$close()
+
+serv$open()
+serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
+load("Citations.RData")
+citationList <- hires[hires$Name%in%citations$Name[citations$gslink=="ROBOT-ERROR"],] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
+citations <- rbind(subset(citations, gslink!="ROBOT-ERROR"), citationList)
+save(citations, file="Citations.RData")
+serv$close()

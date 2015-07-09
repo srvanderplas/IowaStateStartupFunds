@@ -31,12 +31,15 @@ setupScholar <- function(serv){
   # return(serv)
 }
 
-reset.ip <- function(requests){
-  if(requests>50){
+reset.ip <- function(requests, serv){
+  if(requests%%50==49){
+    oldurl <- serv$serverURL
     # Request new IP from tor
     new.ip()
-    
-    requests <- 0
+    message("Deleting Cookies")
+    serv$deleteAllCookies()
+    try(serv$navigate(oldurl))
+    setupScholar(serv)
   } else {
     requests <- requests + 1
   }
@@ -48,7 +51,8 @@ requests <<- 0
 id.robot <- function(counter, serv){
   if(grepl("not a robot", as.character(serv$getPageSource()))){
     if(counter < 5){
-      system("xdg-open 'https://www.youtube.com/watch?v=GWXLPu8Ky9k'")
+      message("Robot Test!")
+      # system("xdg-open 'https://www.youtube.com/watch?v=GWXLPu8Ky9k'")
       Sys.sleep(60)
       return(id.robot(counter + 1, serv))
     } else {
@@ -84,7 +88,7 @@ id.scriptblock <- function(counter, serv){
 
 
 seleniumScrape <- function(serv, author,  institution="Iowa State University"){
-  serv$open()
+  # serv$open()
   googleScholarUrl <- "http://scholar.google.com"
   
   # putting together the search-URL:
@@ -102,14 +106,10 @@ seleniumScrape <- function(serv, author,  institution="Iowa State University"){
   try(setupScholar(serv))
   
   if(id.robot(0,serv)){
-    
-    serv$close()
     return(data.frame(author=author, gslink = "ROBOT-ERROR", link=NA, bibtex=NA))
   }
   
   if(id.scriptblock(0,serv)){
-    
-    serv$close()
     return(data.frame(author=author, gslink = "SCRIPTBLOCK-ERROR", link=NA, bibtex=NA))
   }
   
@@ -119,11 +119,9 @@ seleniumScrape <- function(serv, author,  institution="Iowa State University"){
   
   pageno <- try(serv$findElement(using='css selector', value="#gs_ab_md")$getElementText()[[1]][1]%>% str_replace_all("(About )|( results.*$)", "") %>% as.numeric())
   
-  requests <<- reset.ip(requests)
+  requests <<- reset.ip(requests, serv)
   
   if(is.character(err) | is.character(pageno)){
-    
-    serv$close()
     return(data.frame(author=author, gslink = "ERROR", link=NA, bibtex=NA))
   }
   
@@ -139,7 +137,7 @@ seleniumScrape <- function(serv, author,  institution="Iowa State University"){
   for(i in 1:length(links)){
     if(i>1){
       serv$navigate(links[i])
-      requests <<- reset.ip(requests)
+      requests <<- reset.ip(requests, serv)
     }
     
     
@@ -164,18 +162,12 @@ seleniumScrape <- function(serv, author,  institution="Iowa State University"){
     for(i in 1:length(bibtexlinks)){
       serv$navigate(bibtexlinks[i])
       bibtexentries[i] <- serv$findElement(using='css', value='body > pre:nth-child(1)')$getElementText()[[1]][1]
-      requests <<- reset.ip(requests)
+      requests <<- reset.ip(requests, serv)
     }
-    
-    serv$close()
     return(data.frame(author=author, gslink = gslinks, link=bibtexlinks, bibtex=bibtexentries))
   } else {
-    
-    serv$close()
     return(data.frame(author=author, gslink = resultsURL, link=NA, bibtex=NA))
   }
-  
-  serv$close()
 }
 
 trySelenium <- function(serv, author, institution=NULL){
@@ -183,7 +175,7 @@ trySelenium <- function(serv, author, institution=NULL){
   if(mode(tmp)=="list") {
     return(tmp) 
   } else {
-    serv$close(); return(data.frame(author=author, gslink = "ERROR-2", link=NA, bibtex=NA))
+    return(data.frame(author=author, gslink = "ERROR-2", link=NA, bibtex=NA))
   }
 }
 

@@ -952,7 +952,10 @@ setupScholar(serv)
 # save(citations, file="Citations.RData")
 # serv$close()
 
-
+load("Citations.RData")
+citations <- subset(citations, !grepl("ERROR", gslink))
+failedlist <- subset(hires, !Name %in% citations$Name)[,"Name"]
+failedlist$success <- FALSE
 serv$open()
 # Show that you aren't a robot?
 serv$navigate("http://scholar.google.com/scholar?q=author:'John Doe'")

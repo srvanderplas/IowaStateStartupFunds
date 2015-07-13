@@ -118,6 +118,7 @@ hires <- hires[,col.order] %>% arrange(Name, Source)
 # Fix Names
 hires$Name <- str_to_upper(hires$Name)
 hires$NameFull <- hires$Name
+col.order <- c(col.order, "NameFull")
 hires$Name <- hires$Name %>%
   str_replace(" {1,}", " ") %>% 
   str_replace("BANG EUN JIN", "BANG, EUNJIN") %>%
@@ -144,7 +145,8 @@ hires$Name <- hires$Name %>%
   str_replace("STAROBIN, SOKO", "SOKO, STAROBIN")%>%
   str_replace("RAJAGOPAL, LAKSHMAN", "LAKSHMAN, RAJAGOPAL") %>%
   str_replace("ZHENG, TIANSHU", "TIANSHU, ZHENG") %>%
-  str_replace("LEE, A YOUNG", "YOUNG, LEE A") %>%
+  str_replace("LEE, A", "LEE, YOUNG-A") %>% 
+  str_replace("RAMAN, RAJ", "RAJ, RAMAN") %>%
   str_replace("ARBUCKLE, J\\.", "ARBUCKLE, J") %>%
   str_replace("BASMAJIAN$", "BASMAJIAN, CARLTON") %>%
   str_replace("BELLAIRE$", "BELLAIRE, BRYAN") %>%
@@ -184,7 +186,8 @@ hires$Name <- hires$Name %>%
   str_replace("WINTER, MATT$", "WINTER, MATTHEW") %>%
   str_replace("ZHANG, WENSHEN$", "ZHANG, WENSHENG") %>%
   str_replace("VANLOOCKE, ANDY", "VANLOOCKE, ANDREW") %>%
-  str_replace("ALEXANDEER", "ALEXANDER")
+  str_replace("ALEXANDEER", "ALEXANDER") %>%
+  str_replace("ANDERSON, DAVID", "ANDERSEN, DAVID")
 
 hires$Faculty.rank <- hires$Faculty.rank %>%
   str_replace("Professor", "Prof") %>% 

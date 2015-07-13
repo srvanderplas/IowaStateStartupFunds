@@ -136,7 +136,15 @@ names(hire.names) <- c("Last", "First", "MI")
 hires$Name <- paste0(hire.names$Last, ", ", hire.names$First)
 
 hires$Name <- hires$Name %>% 
-  str_replace(", $", "") %>%
+  str_replace(", $", "") %>% 
+  str_replace("AILEEN, KEATING", "KEATING, AILEEN") %>%
+  str_replace("MICHAEL, CASTELLANO", "CASTELLANO, MICHAEL") %>%
+  str_replace("FERNANDO, MIGUEZ", "MIGUEZ, FERNANDO") %>%
+  str_replace("ZHIYOU, WEN", "WEN, ZHIYOU") %>%
+  str_replace("STAROBIN, SOKO", "SOKO, STAROBIN")%>%
+  str_replace("RAJAGOPAL, LAKSHMAN", "LAKSHMAN, RAJAGOPAL") %>%
+  str_replace("ZHENG, TIANSHU", "TIANSHU, ZHENG") %>%
+  str_replace("LEE, A YOUNG", "YOUNG, LEE A") %>%
   str_replace("ARBUCKLE, J\\.", "ARBUCKLE, J") %>%
   str_replace("BASMAJIAN$", "BASMAJIAN, CARLTON") %>%
   str_replace("BELLAIRE$", "BELLAIRE, BRYAN") %>%

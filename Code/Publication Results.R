@@ -10,50 +10,59 @@ library(scales) # for greater legend/scale control
 # library(GoogleScholarScrapeR)
 # -------------------------------------------------------------------------------
 
+# Hires Data --------------------------------------------------------------------
 # Read in startup funding information
 source("Code/CleanStartupFundingData.R")
 
 objs <- ls()
 rm(list=objs[!objs%in%c("hires", "serv", "new.ip", "fprof", "setupScholar")])
+# -------------------------------------------------------------------------------
 
+# Functions to work with Selenium and Tor ---------------------------------------
+
+
+# Set tor password with tor --hash-password <password>
+# Then save the following command as newIP:
+# (echo authenticate '"password"'; echo signal newnym; echo quit) | nc localhost 2200
+# make executable
 new.ip <- function(){
   system('/home/susan/bin/newIP')
 }
 
 setupScholar <- function(serv){
   # set bibtex import settings
-  serv$findElement(using='css selector', value="#gs_btnAD")$clickElement()
-  serv$findElement(using='css selector', value=".gs_btnP > span:nth-child(1)")$clickElement()
-  serv$findElement(using='css selector', value="#gs_num")$setElementAttribute("value", "20")
-  serv$findElement(using='css selector', value='#scis1')$clickElement()
-  serv$findElement(using='css selector', value="button.gs_btn_act:nth-child(1)")$clickElement()
+  try(serv$findElement(using='css selector', value="#gs_btnAD")$clickElement())
+  try(serv$findElement(using='css selector', value=".gs_btnP > span:nth-child(1)")$clickElement())
+  # serv$findElement(using='css selector', value="#gs_num")$setElementAttribute("value", "20")
+  try(serv$findElement(using='css selector', value='#scis1')$clickElement())
+  try(serv$findElement(using='css selector', value="button.gs_btn_act:nth-child(1)")$clickElement())
   
   # return(serv)
 }
 
 reset.ip <- function(requests, serv){
-  if(requests%%50==49){
+  if(requests%%100==99){
     oldurl <- serv$serverURL
     # Request new IP from tor
     new.ip()
     message("Deleting Cookies")
-    serv$deleteAllCookies()
+    serv$close()
+    serv$open()
     try(serv$navigate(oldurl))
-    setupScholar(serv)
+    try(setupScholar(serv))
   } else {
-    requests <- requests + 1
+    requests <<- requests + 1
   }
   return(requests)
 }
 
-requests <<- 0
-
 id.robot <- function(counter, serv){
   if(grepl("not a robot", as.character(serv$getPageSource()))){
-    if(counter < 5){
+    if(counter < 3){
       message("Robot Test!")
       # system("xdg-open 'https://www.youtube.com/watch?v=GWXLPu8Ky9k'")
-      Sys.sleep(60)
+      Sys.sleep(30)
+      # try(serv$navigate(serv$serverURL))
       return(id.robot(counter + 1, serv))
     } else {
       return(TRUE)
@@ -66,14 +75,19 @@ id.robot <- function(counter, serv){
 id.scriptblock <- function(counter, serv){
   if(grepl("We're sorry", as.character(serv$getPageSource()))){
     message("Timed Out on this IP")
+    oldurl <- serv$serverURL
+    # Request new IP from tor
     new.ip()
     message("Deleting Cookies")
-    serv$deleteAllCookies()
-    try(serv$navigate(serv$serverURL))
+    serv$close()
+    serv$open()
+    requests <<-0
+    try(serv$navigate(oldurl))
     
     # Check for robot message
     robot <- id.robot(0, serv)
     
+    try(setupScholar(serv))
     if(robot){ # Failure
       message("Prove you are human to Google first")
       return(TRUE)
@@ -103,7 +117,7 @@ seleniumScrape <- function(serv, author,  institution="Iowa State University"){
   
   # get content and parse it:
   err <- try(serv$navigate(resultsURL))
-  try(setupScholar(serv))
+  # try(setupScholar(serv))
   
   if(id.robot(0,serv)){
     return(data.frame(author=author, gslink = "ROBOT-ERROR", link=NA, bibtex=NA))
@@ -113,13 +127,16 @@ seleniumScrape <- function(serv, author,  institution="Iowa State University"){
     return(data.frame(author=author, gslink = "SCRIPTBLOCK-ERROR", link=NA, bibtex=NA))
   }
   
-  if(!grepl("BibTeX", as.character(serv$getPageSource()))){
-    setupScholar(serv)
+  if(!grepl("gs_nta gs_nph", as.character(serv$getPageSource()))){
+    if(grepl("gs_ad_dd", as.character(serv$getPageSource()))){
+      try(setupScholar(serv))      
+      try(setupScholar(serv))
+    }
   }
   
   pageno <- try(serv$findElement(using='css selector', value="#gs_ab_md")$getElementText()[[1]][1]%>% str_replace_all("(About )|( results.*$)", "") %>% as.numeric())
   
-  requests <<- reset.ip(requests, serv)
+  # requests <<- reset.ip(requests, serv)
   
   if(is.character(err) | is.character(pageno)){
     return(data.frame(author=author, gslink = "ERROR", link=NA, bibtex=NA))
@@ -141,6 +158,7 @@ seleniumScrape <- function(serv, author,  institution="Iowa State University"){
     }
     
     
+    h1a <- serv$findElements(using='link text', value="Import into BibTeX")
     h1 <- serv$findElements(using='css selector', value="div.gs_ri a.gs_nta.gs_nph")
     h2 <- serv$findElements(using='css selector', value="div.gs_ri > h3.gs_rt")
     
@@ -178,6 +196,10 @@ trySelenium <- function(serv, author, institution=NULL){
     return(data.frame(author=author, gslink = "ERROR-2", link=NA, bibtex=NA))
   }
 }
+# -------------------------------------------------------------------------------
+
+# Setup Selenium ----------------------------------------------------------------
+requests <<- 0
 
 # RSelenium::startServer() if required
 require(RSelenium)
@@ -196,774 +218,97 @@ serv <- remoteDriver(remoteServerAddr = "localhost"
                      , browserName = "firefox"
                      , extraCapabilities = fprof
 )
+# -------------------------------------------------------------------------------
 
-# Set tor password with tor --hash-password <password>
-# Then save the following command as newIP:
-# (echo authenticate '"password"'; echo signal newnym; echo quit) | nc localhost 2200
-# make executable
-
-
+# Acquire Data from Selenium ----------------------------------------------------
 # Open firefox window
 serv$open()
 serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
 # Show that you aren't a robot?
 
 setupScholar(serv)
-# 
-# 
+
+### Find citations for about 5 people at a time, then bind to list and save
 # citations <- hires[1:5,] %>% group_by(Name) %>%  do(seleniumScrape(serv, .$Name, "Iowa State University"))
 # citations <- rbind(citations, 
 #                    hires[6:10,] %>% group_by(Name) %>% do(seleniumScrape(serv, .$Name, "Iowa State University")))
 # save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# load("Citations.RData")
-# citationList <- hires[11:15,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(citations, citationList)
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# load("Citations.RData")
-# citationList <- hires[16:20,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(citations, citationList)
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# load("Citations.RData")
-# citationList <- hires[21:25,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(citations, citationList)
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# load("Citations.RData")
-# citationList <- hires[25:30,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(citations, citationList)
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# load("Citations.RData")
-# citationList <- hires[31:40,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(citations, citationList)
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# load("Citations.RData")
-# citationList <- hires[41:50,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(citations, citationList)
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# load("Citations.RData")
-# citationList <- hires[hires$Name%in%citations$Name[citations$gslink=="ROBOT-ERROR"],] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(subset(citations, gslink!="ROBOT-ERROR"), citationList)
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# load("Citations.RData")
-# citationList <- hires[51:60,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(citations, citationList)
-# save(citations, file="Citations.RData")
-# 
-# citationList <- hires[hires$Name%in%citations$Name[which(grepl("ERROR",citations$gslink))],] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- rbind(subset(citations, !grepl("ERROR", gslink)), citationList)
-# save(citations, file="Citations.RData")
-# 
-# load("Citations.RData")
-# serv$open()
-# citationList <- hires[61:66,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# 
-# citationList <- hires[67:80,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# 
-# citationList <- hires[81:90,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# 
-# citationList <- hires[91:100,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# 
-# serv$close()
-# serv$open()
-# citationList <- hires[101:120,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# 
-# serv$close()
-# serv$open()
-# citationList <- hires[121:130,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# 
-# serv$close()
-# serv$open()
-# citationList <- hires[131:140,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# setupScholar(serv)
-# citationList <- hires[141:150,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[151:160,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[161:170,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[171:180,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[181:190,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[191:200,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[201:210,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[211:220,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[221:230,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[231:240,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[241:250,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[251:260,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[261:270,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[271:280,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[281:290,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[291:300,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[291:300,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[301:310,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[311:320,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[321:330,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[331:340,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[341:350,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[351:360,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[361:370,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[371:380,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[381:390,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[391:400,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[401:410,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[421:430,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[431:440,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[441:450,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[451:460,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[461:470,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[471:480,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[481:490,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[491:500,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[501:510,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[511:520,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[521:530,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[531:540,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[541:550,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[551:560,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[561:570,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[571:580,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[581:590,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[591:600,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[600:610,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[611:620,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[621:630,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[631:640,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[641:650,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[651:660,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[661:670,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[671:680,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[681:690,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[691:700,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[701:710,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[711:720,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[721:730,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[731:740,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[741:750,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[751:760,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[761:770,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[771:780,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[781:790,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[791:800,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-
-# serv$open()
-# serv$navigate(sprintf("http://scholar.google.com/scholar?q=author:'%s' 'Iowa State University'", sample(hires$Name, 1)))
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- hires[801:807,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citations <- unique(rbind(citations, citationList))
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
+#
+### Once through one time, re-try failed attempts. 
 # load("Citations.RData")
 # citations <- subset(citations, !grepl("ERROR", gslink))
 # failedlist <- subset(hires, !Name %in% citations$Name)[,"Name"]
-# failedlist$success <- FALSE
-# serv$open()
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- failedlist[1:10,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citationList <- subset(citationList, !grepl("ERROR", gslink))
-# citations <- unique(rbind(citations, citationList))
 # failedlist$success <- failedlist$Name%in%citations$Name
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
-# citations <- subset(citations, !grepl("ERROR", gslink))
-# failedlist <- subset(hires, !Name %in% citations$Name)[,"Name"]
-# failedlist$success <- FALSE
-# serv$open()
-# # Show that you aren't a robot?
-# setupScholar(serv)
-# citationList <- subset(failedlist, !success)[1:10,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-# citationList <- subset(citationList, !grepl("ERROR", gslink))
-# citations <- unique(rbind(citations, citationList))
-# failedlist$success <- failedlist$Name%in%citations$Name
-# sum(failedlist$success)
-# save(citations, file="Citations.RData")
-# serv$close()
-# 
 # serv$open()
 # # Show that you aren't a robot?
 # serv$navigate("http://scholar.google.com/scholar?q=author:'John Doe'")
 # setupScholar(serv)
-# citationList <- subset(failedlist, !success)[1:10,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
+# citationList <- subset(failedlist, !success)[1,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
 # citationList <- subset(citationList, !grepl("ERROR", gslink))
 # citations <- unique(rbind(citations, citationList))
 # failedlist$success <- failedlist$Name%in%citations$Name
 # sum(failedlist$success)
 # save(citations, file="Citations.RData")
 # serv$close()
+# -------------------------------------------------------------------------------
 
+# Clean Data --------------------------------------------------------------------
 load("Citations.RData")
-citations <- subset(citations, !grepl("ERROR", gslink))
-failedlist <- subset(hires, !Name %in% citations$Name)[,"Name"]
-failedlist$success <- FALSE
-serv$open()
-# Show that you aren't a robot?
-serv$navigate("http://scholar.google.com/scholar?q=author:'John Doe'")
-setupScholar(serv)
-citationList <- subset(failedlist, !success)[1:10,] %>% group_by(Name) %>% do(trySelenium(serv=serv, author=.$Name, institution="Iowa State University"))
-citationList <- subset(citationList, !grepl("ERROR", gslink))
-citations <- unique(rbind(citations, citationList))
-failedlist$success <- failedlist$Name%in%citations$Name
-sum(failedlist$success)
-save(citations, file="Citations.RData")
-serv$close()
+citations.full <- citations[,2:5]
+
+
+citations.full$author <- citations.full$author %>% 
+  str_replace("AILEEN, KEATING", "KEATING, AILEEN") %>%
+  str_replace("MICHAEL, CASTELLANO", "CASTELLANO, MICHAEL") %>%
+  str_replace("FERNANDO, MIGUEZ", "MIGUEZ, FERNANDO") %>%
+  str_replace("ZHIYOU, WEN", "WEN, ZHIYOU") %>%
+  str_replace("STAROBIN, SOKO", "SOKO, STAROBIN")%>%
+  str_replace("RAJAGOPAL, LAKSHMAN", "LAKSHMAN, RAJAGOPAL") %>%
+  str_replace("ZHENG, TIANSHU", "TIANSHU, ZHENG") %>%
+  str_replace("LEE, A YOUNG", "YOUNG, LEE A") #%>% 
+
+# Extract bibtex information from the bibtex column in df
+extract_bibtex <- function(df){
+  df$type <- with(df, str_extract(bibtex, "@(\\w{1,})") %>% str_replace("@", ""))
+  df$title <- with(df, str_extract(bibtex, "title=\\{.*?\\},?\\n") %>% str_replace("title=\\{(.*)?\\},?\\n", "\\1"))
+  df$booktitle <- with(df, str_extract(bibtex, "booktitle=\\{.*?\\},?\\n") %>% str_replace("booktitle=\\{(.*)?\\},?\\n", "\\1"))
+  df$authors <- with(df, str_extract(bibtex, "author=\\{.*?\\},?\\n") %>% str_replace("author=\\{(.*)?\\},?\\n", "\\1")) %>%
+    str_replace_all(fixed('{\\"u}'), "u") %>%
+    str_replace_all(fixed('{\\"o}'), "o") %>%
+    str_replace_all(fixed("{\\'a}"), "a") %>%
+    str_replace_all(fixed('{\\v{z}}'), "z") %>%
+    str_replace_all(fixed("{\\i}"), "i") %>%
+    str_replace_all(fixed('{\\"U}'), "U") %>%
+    str_replace_all(fixed("{\\~n}"), "n") %>%
+    str_replace_all(fixed("{\\'o}"), "o") %>% 
+    str_replace_all(fixed("{\\'n}"), "n") %>%
+    str_replace_all(fixed("{\\k{e}}"), "e") %>%
+    str_replace_all(fixed("{\\k{a}}"), "a") %>%
+    str_replace_all(fixed("{\\`e}"), "e") %>%
+    str_replace_all(fixed("{\\'c}"), "c")
+  df$journal <- with(df, str_extract(bibtex, "journal=\\{.*?\\},?\\n") %>% str_replace("journal=\\{(.*)?\\},?\\n", "\\1"))
+  df$publisher <- with(df, str_extract(bibtex, "publisher=\\{.*?\\},?\\n") %>% str_replace("publisher=\\{(.*)?\\},?\\n", "\\1"))
+  df$year <- with(df, str_extract(bibtex, "year=\\{.*?\\},?\\n") %>% str_replace("year=\\{(.*)?\\},?\\n", "\\1") %>% as.numeric())
+  author.list <- str_split_fixed(df$authors %>% str_to_title(), " and ", 11)
+  author.lastname <- str_split_fixed(df$author %>% str_to_title(), ", ", 2)[,1] %>% str_to_title()
+  
+  df$author.num <- sapply(1:length(author.lastname), function(x) {
+    tmp <- str_detect(author.list[x,], author.lastname[x])
+    ifelse(sum(tmp)==0, NA, which(tmp))
+  })
+  df$author.match <- sapply(1:nrow(df), function(x) author.list[x, df$author.num[x]])
+  df$num.authors <- str_split(df$authors, " and ") %>% sapply( function(x) length(unlist(x) ))
+  return(df)
+}
+
+citations <- citations.full %>% rowwise() %>% extract_bibtex()
+citations <- citations[,c("author", "author.match", "type", "year", "title", "booktitle", "authors", "journal", "publisher", "author.num", "num.authors", "link", "gslink", "bibtex")]
+
+citations <- filter(citations, year>=2005)
+citations$author <- citations$author %>% str_to_title()
+citations$author.pub <- str_match(tolower(citations$authors), tolower(citations$author)) %>% str_to_title()
+filter(citations, is.na(citations$author.pub))[1:10,c("author", "authors")] %>% unique %>% as.data.frame()
+
+# Issues: 
+# Anderson, David - need middle name/initial...
+

@@ -848,15 +848,16 @@ We see that in general, yearly publications are tenuously related to startup pac
 
 ### Analysis of Publications by College
 
-```{r GScholarLAS, fig.width=6, fig.height=5, dpi=300}
-ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), data=subset(citations.yearly, CollegeFac=="LAS")) +
+```{r GScholarLAS, fig.width=6, fig.height=8, dpi=300}
+ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, CollegeFac=="LAS")) +
   geom_line(aes(group=Name)) + 
   scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Yearly Publications") + 
-  ggtitle("Yearly Publications and Startup Funding") +
+  ggtitle("Yearly Publications and Startup Funding (Liberal Arts & Sciences)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
 ```
@@ -865,7 +866,7 @@ In some LAS departments, like Computer Science, publication frequency does not a
 
 In all departments, however, it seems that differential startup funding does not impact publication frequency or trajectory. 
 
-```{r GScholarAGLS, fig.width=6, fig.height=5, dpi=300}
+```{r GScholarAGLS, fig.width=6, fig.height=7, dpi=300}
 ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), 
        data=subset(citations.yearly, atISU & CollegeFac=="AGLS")) +
   geom_line(aes(group=Name)) + 
@@ -874,7 +875,7 @@ ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac),
   guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Yearly Publications") + 
-  ggtitle("Yearly Publications and Startup Funding") +
+  ggtitle("Yearly Publications and Startup Funding (Ag & Life Sciences)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
 ```
@@ -882,7 +883,7 @@ ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac),
 In Ag & Life Sciences, publication trends seem to be highly department-dependent. In Animal Science (and, to a lesser degree, Agronomy), publications seem to primarily increase over time. In other departments, such as NREM and ABE, publications do not seem to increase over time, but are highly variable in any given year. In all departments, it does not appear that there is a significant relationship between startup funding and publishing trajectory.
 
 
-```{r GScholarBus, fig.width=6, fig.height=4, dpi=300}
+```{r GScholarBus, fig.width=6, fig.height=5, dpi=300}
 ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), 
        data=subset(citations.yearly, atISU & CollegeFac=="Bus")) +
   geom_line(aes(group=Name)) + 
@@ -891,14 +892,14 @@ ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac),
   guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Yearly Publications") + 
-  ggtitle("Yearly Publications and Startup Funding") +
+  ggtitle("Yearly Publications and Startup Funding (Business)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
 ```
 
 In the business college, publications at (on average) `r round(with(subset(citations.total, CollegeFac=="Bus"), mean(total.pubs)/mean(YearsAtISU)), 2)` publications per year. As there are relatively few hires who have been at ISU for more than 5 years, it is difficult to draw any conclusions about publishing trajectories over time. 
 
-```{r GScholarDes, fig.width=6, fig.height=5, dpi=300}
+```{r GScholarDes, fig.width=6, fig.height=6, dpi=300}
 ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), 
        data=subset(citations.yearly, atISU & CollegeFac=="Des")) +
   geom_line(aes(group=Name)) + 
@@ -907,14 +908,14 @@ ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac),
   guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Yearly Publications") + 
-  ggtitle("Yearly Publications and Startup Funding") +
+  ggtitle("Yearly Publications and Startup Funding (Design)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
 ```
 
 The College of Design seems to have relatively few publications per person, per year (as indexed by Google Scholar), in addition to relatively few hires between 2005-2015. This scarcity of data makes drawing any concludions difficult. 
 
-```{r GScholarEngr, fig.width=6, fig.height=5, dpi=300}
+```{r GScholarEngr, fig.width=6, fig.height=6, dpi=300}
 ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, color=TotalCostFac), 
        data=subset(citations.yearly, atISU & CollegeFac=="Engr")) +
   geom_line(aes(group=Name)) + 
@@ -923,7 +924,7 @@ ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, co
   guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Yearly Publications") + 
-  ggtitle("Yearly Publications and Startup Funding") +
+  ggtitle("Yearly Publications and Startup Funding (Engineering)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
 ```
@@ -942,7 +943,7 @@ ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, co
   guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Yearly Publications") + 
-  ggtitle("Yearly Publications and Startup Funding") +
+  ggtitle("Yearly Publications and Startup Funding (Human Sciences)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
 ```
@@ -957,7 +958,7 @@ ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, co
   guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Yearly Publications") + 
-  ggtitle("Yearly Publications and Startup Funding") +
+  ggtitle("Yearly Publications and Startup Funding (Vet Med)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
 ```

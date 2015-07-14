@@ -272,7 +272,6 @@ citations.full$author <- citations.full$author %>%
   str_replace("FERNANDO, MIGUEZ", "MIGUEZ, FERNANDO") %>%
   str_replace("ZHIYOU, WEN", "WEN, ZHIYOU") %>%
   str_replace("STAROBIN, SOKO", "SOKO, STAROBIN")%>%
-  str_replace("RAJAGOPAL, LAKSHMAN", "LAKSHMAN, RAJAGOPAL") %>%
   str_replace("ZHENG, TIANSHU", "TIANSHU, ZHENG") %>%
   str_replace("LEE, A", "LEE, YOUNG-A") %>% 
   str_replace("RAMAN, RAJ", "RAJ, RAMAN")
@@ -494,13 +493,14 @@ citations <- subset(citations, author.match!="Kwak, Han-Gang")
 
 # Non-European character sets
 tmp <- citations$title[grep("_ERR_", iconv(citations$title, "UTF-8", "CP1252", sub="_ERR_"))]
-subset(tmp, !grepl("`|′|׳|“|″|'|′|≤|′|′|⋆|∗|𝛿|ϵ|∆|≫|≈|𝑝", tmp))
+# subset(tmp, !grepl("`|′|׳|“|″|'|′|≤|′|′|⋆|∗|𝛿|ϵ|∆|≫|≈|𝑝", tmp))
 # -------------------------------------------------------------------------------
 
 # Summarize Data ----------------------------------------------------------------
 
 # Clean up
 suppressWarnings(rm(citations.full, requests, serv, tmp, extract_bibtex, id.robot, id.scriptblock, new.ip, reset.ip, seleniumScrape, setupScholar, trySelenium))
-
 # -------------------------------------------------------------------------------
+
+save(citations, file="Data/Publications.RData")
 

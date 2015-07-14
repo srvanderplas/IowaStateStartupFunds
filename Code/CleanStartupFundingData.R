@@ -143,7 +143,6 @@ hires$Name <- hires$Name %>%
   str_replace("FERNANDO, MIGUEZ", "MIGUEZ, FERNANDO") %>%
   str_replace("ZHIYOU, WEN", "WEN, ZHIYOU") %>%
   str_replace("STAROBIN, SOKO", "SOKO, STAROBIN")%>%
-  str_replace("RAJAGOPAL, LAKSHMAN", "LAKSHMAN, RAJAGOPAL") %>%
   str_replace("ZHENG, TIANSHU", "TIANSHU, ZHENG") %>%
   str_replace("LEE, A", "LEE, YOUNG-A") %>% 
   str_replace("RAMAN, RAJ", "RAJ, RAMAN") %>%
@@ -311,7 +310,7 @@ hires$Dept <- hires$Dept %>%
   str_replace("V*[Pp][aA]?[tT][hH]", "VPath") %>%
   str_replace("WLC", "WL&C") %>%
   str_replace(" & African American Studies", "/A&AAS") %>%
-  str_replace("Music & Theatre", "M&T") %>%
+  str_replace("Music & Theatre", "Music") %>%
   str_replace("ECpE & MSE", "ECpE/MSE") %>%
   str_replace("Extension", "") %>%
   str_replace("^/|/$", "") %>% 
@@ -356,3 +355,7 @@ startup.package <- melt(startup.package, id.vars=c("Name", "College", "Year", "D
 
 # Cleaning up -------------------------------------------------------------------
 rm(format.cols, stripExtraCols, dept.prog, col.order, fylist)
+# -------------------------------------------------------------------------------
+
+save(hires, file="Data/Hires.RData")
+save(funding, startup.package, file="Data/FundingStartup.RData")

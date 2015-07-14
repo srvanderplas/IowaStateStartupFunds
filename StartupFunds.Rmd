@@ -11,7 +11,7 @@ output:
 ---
 
 
-```{r setup, echo=FALSE}
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
 library(knitr)
 library(htmltools)
 library(stringr) # for string manipulation

@@ -14,6 +14,11 @@ output:
 ```{r setup, echo=FALSE}
 library(knitr)
 library(htmltools)
+library(stringr) # for string manipulation
+library(lubridate) # for date manipulation
+library(reshape2) # for reshaping data
+library(plyr) # for rbind.fill function
+library(dplyr) # for %>% operator
 library(ggplot2)
 library(scales)
 # s0 <- knitr::knit_hooks$get('source')
@@ -73,7 +78,9 @@ The following information was taken from meeting notes (meetings on 6/4/2015 and
 ## Office of the Vice President for Research Data
 
 ```{r OVPRdata, cache=F}
-source("Code/CleanStartupFundingData.R")
+# source("Code/CleanStartupFundingData.R")
+load("Data/Hires.RData")
+load("Data/FundingStartup.RData")
 ```
 
 ### Total Startup Package Cost
@@ -198,8 +205,60 @@ Datasets from OSPA contain information on proposals and awards from 2005-2010 an
 
 
 ```{r OSPAdata, cache=F}
-source("Code/CleanAwardsData.R")
-source("Code/CleanProposalsData.R")
+# source("Code/CleanAwardsData.R")
+# source("Code/CleanProposalsData.R")
+load("Data/Awards.RData")
+load("Data/Proposals.RData")
+```
+
+```{r MergeDatasetsSetup, cache=F}
+received.money <- awards %>% 
+  group_by(Investigator) %>% 
+  summarize(grant.received = sum(Award.Amount), 
+            n.awards = length(unique(Award.Number)))
+received.money$grant.received[is.na(received.money$grant.received)] <- 0
+
+submitted.proposals <- prop %>% 
+  group_by(Investigator) %>% 
+  summarize(total.proposal.money = sum(Proposal.Amount), 
+            n.proposals = length(unique(Proposal.Number)), 
+            prop.fund.pct = mean(Proposal.Status=="Funded"))
+submitted.proposals$total.proposal.money[is.na(submitted.proposals$total.proposal.money)] <- 0
+
+isuHires <- merge(hires, received.money, by.x="Name", by.y="Investigator", all.x=T, all.y=F)
+isuHires <- merge(isuHires, submitted.proposals, by.x="Name", by.y="Investigator", all.x=T, all.y=F)
+isuHires$grant.received[is.na(isuHires$grant.received)] <- 0
+isuHires$total.proposal.money[is.na(isuHires$total.proposal.money)] <- 0
+
+isuHires$ProfRankFac <- isuHires$ProfRank %>% 
+  str_replace("(Adjunct/Lecturer)|(Affiliate Prof)|(Clinician)", "Other") %>%
+  str_replace("Distg ", "") %>%
+  factor(levels=c("Asst Prof", "Assoc Prof", "Prof", "Other"), labels=c("Assistant", "Associate", "Professor", "Other"))
+
+isuHires$CollegeFac <- isuHires$College %>% factor(labels=c("AGLS", "Bus", "Des", "Engr", "Hum Sci", "LAS", "Vet Med"))
+
+isuHires$YearsAtISU <- 2015 - isuHires$Year
+
+isuHires$YearsAtISUFac <- cut_number(isuHires$YearsAtISU, n=4)
+
+# Quartiles for startup funding, by college
+startup.quantiles <- isuHires %>% 
+  group_by(CollegeFac) %>% 
+  summarize(Q1=quantile(Total.Cost, .25, type=8), 
+            Q2=quantile(Total.Cost, .5, type=8), 
+            Q3=quantile(Total.Cost, .75, type=8), 
+            Q4=quantile(Total.Cost, 1, type=8)) %>% 
+  melt(id.vars=1, measure.vars=2:ncol(.), variable.name="Quantile", value.name="Total.Cost")
+
+# Rank individual faculty startup packages by the quartile of their respective college. 
+isuHires <- isuHires %>% 
+  group_by(CollegeFac) %>%
+  mutate(TotalCostFac = as.numeric(cut(Total.Cost, breaks=c(-1, quantile(Total.Cost, probs=1:4/4)))), 
+         TotalCostDecile = as.numeric(cut(Total.Cost, breaks=c(-1, quantile(Total.Cost, probs=1:10/10)))))
+isuHires$TotalCostFac[is.na(isuHires$TotalCostFac)] <- 1
+isuHires$TotalCostDecile[is.na(isuHires$TotalCostDecile)] <- 1
+isuHires$TotalCostFac <- factor(isuHires$TotalCostFac, levels=1:4, labels=c("Startup $: Q1", "Startup $: Q2", "Startup $: Q3", "Startup $: Q4"))
+isuHires$TotalCostDecile <- factor(isuHires$TotalCostDecile, levels=1:10)
 ```
 
 The following sections are intended to explore some of the limitations of the Proposal and Award datasets. They are not essential for understanding the subsequent analysis. 
@@ -382,186 +441,70 @@ Text Contains | "Iowa State University"
 Results were also filtered to ensure that the results were in areas that John Smith at Iowa State would publish in (where possible, ambiguities were resolved by referring to an online CV). 
 
 ```{r GScholarData, cache=F}
-source("Code/Publication Results.R")
-tmp <- hires[,c("Name", "College", "Dept1", "Dept2", "Year", "ProfRank", "Total.Cost")]
-tmp$Name <- str_to_title(tmp$Name)
-citations <- merge(tmp, citations, by.x="Name", by.y="author", all.x=T, all.y=T)
+# source("Code/Publication Results.R")
+load("Data/Publications.RData")
+```
+```{r GScholarMerge, cache=F}
+# Hire information
+tmp <- isuHires[,c("Name", "CollegeFac", "Dept1", "Dept2", "Year", "YearsAtISU", "YearsAtISUFac", "ProfRank", "ProfRankFac", "Total.Cost", "TotalCostFac")]
+tmp$Name <- str_to_title(tmp$Name) %>% str_replace(fixed("O'd"), "O'D")
+citations <- merge(tmp, citations, by.x="Name", by.y="author", all=T)
 names(citations)[names(citations)=="year"] <- "year.pub"
 
-citations$ProfRankFac <- citations$ProfRank %>% 
-  str_replace("(Adjunct/Lecturer)|(Affiliate Prof)|(Clinician)", "Other") %>%
-  str_replace("Distg ", "") %>%
-  factor(levels=c("Asst Prof", "Assoc Prof", "Prof", "Other"), labels=c("Assistant", "Associate", "Professor", "Other"))
+# Add in extra years
+citations <- citations %>% group_by(Name) %>% do({
+  idx <- !c(2005:2015)%in%.$year.pub
+  if(sum(idx)>0){
+    newdf <- data.frame(unique(.[,c("Name", "CollegeFac", "Dept1", "Dept2", "Year", "YearsAtISU", "YearsAtISUFac", "ProfRank", "ProfRankFac", "Total.Cost", "TotalCostFac")]), author.match=unique(.$Name), year.pub=c(2005:2015)[idx])
+    rbind_list(., newdf) %>% as.data.frame() %>% arrange(year.pub)
+  } else {
+    .
+  }
+}) 
 
-citations$CollegeFac <- citations$College %>% factor(labels=c("AGLS", "Bus", "Des", "Engr", "Hum Sci", "LAS", "Vet Med"))
-
-citations$YearsAtISU <- 2015 - citations$Year
+citations$YearsAtISU <- with(citations, year.pub-Year)
 
 # Remove citations from more than one year prior to hire
-citations <- subset(citations, year.pub+1>=Year)
+# citations <- subset(citations, year.pub+1>=Year)
 
-citations.sum <- citations %>% group_by(Name, CollegeFac, Dept1, Dept2, Year, YearsAtISU, year.pub, ProfRankFac, Total.Cost) %>% summarize(total=length(type), articles=sum(type=="article"), books=sum(type=="book"), other=sum(type=="other"))
+citations.yearly <- citations %>% 
+  group_by(Name, CollegeFac, Dept1, Dept2, Year, YearsAtISU, year.pub, ProfRank, ProfRankFac, Total.Cost, TotalCostFac) %>% 
+  summarize(
+    atISU=(unique(year.pub)>=unique(Year)),
+    total.pubs=length(type[!is.na(type)]), 
+    articles=sum(type=="article", na.rm=T), 
+    books=sum(type=="book", na.rm=T), 
+    other=sum(type=="other", na.rm=T))
 
+citations.total <- citations %>% 
+  group_by(Name, CollegeFac, Dept1, Dept2, Year, ProfRank, ProfRankFac, Total.Cost, TotalCostFac) %>%   
+  summarize(
+    YearsAtISU=2015-unique(Year),
+    total.pubs=length(type[!is.na(type)]), 
+    articles=sum(type=="article", na.rm=T), 
+    books=sum(type=="book", na.rm=T), 
+    other=sum(type=="other", na.rm=T))
+
+rm(tmp)
 ```
 
 ```{r GScholarCollege, fig.width=6, fig.height=4, dpi=300}
-ggplot(aes(x=year.pub-Year+.5, y=total), data=subset(citations.sum, !is.na(CollegeFac))) +
+ggplot(aes(x=YearsAtISU, y=total.pubs), data=subset(citations.yearly, atISU & !is.na(CollegeFac))) +
   geom_vline(xintercept=0) + 
-  geom_jitter(size=1, shape=1, position=position_jitter(width=.5, height=0), alpha=.3) + 
+  geom_jitter(size=1, shape=1, position=position_jitter(width=.4, height=.4), alpha=.3) + 
   geom_smooth(aes(group=Dept1), se=F, alpha=.25) + 
   facet_wrap(~CollegeFac, ncol=4) + 
-  xlab("Years between hire and publication") + ylab("Papers Published/Year") + 
+  xlab("Years at ISU") + ylab("Papers Published/Year") + 
   ggtitle("Yearly Publications") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(-5, 0, 5, 10))
 ```
 
-From this broad overview, we see that publications in many departments peak at approximately 5 years, and then tail off slightly by year 10. 
+Above, the x-axis shows time at Iowa State (or rather, time since hired), and the y-axis shows the yearly publications (books, articles, etc.). The blue lines indicate departmental averages over time (loess smooth), where there is sufficient data to compute such averages. From this broad overview, we see that publications in many departments peak at approximately 5 years, and then tail off slightly by year 10. 
 
-### Analysis of Publications by College
-
-```{r GScholarLAS, fig.width=6, fig.height=5, dpi=300}
-ggplot(aes(x=year.pub-Year+.5, y=total), data=subset(citations.sum, CollegeFac=="LAS")) +
-  geom_vline(xintercept=0) + 
-  geom_jitter(size=1, shape=1, position=position_jitter(width=.5, height=0), alpha=.3) + 
-  geom_line(aes(group=Name), alpha=.5) + 
-  facet_wrap(~Dept1, ncol=6) + 
-  xlab("Years between hire and publication") + ylab("Papers Published/Year") + 
-  ggtitle("Yearly Publications") +
-  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_x_continuous(breaks=c(-5, 0, 5, 10))
-```
-
-In some LAS departments, like Computer Science, publication frequency does not appear to be impacted by career stage. In other departments, such as Chemistry, publications increase over time, and then may decrease after 5-6 years (tenure). Departments such as Music do not seem to have much publication pressure (at least not which would appear on Google Scholar). In the statistics department, most hires publish at least 4 papers per year throughout their careers (perhaps 2-3 initially), but after 3-5 years, some professors begin publishing at a much higher rate, likely due to increased collaboration. 
-
-```{r GScholarAGLS, fig.width=6, fig.height=5, dpi=300}
-ggplot(aes(x=year.pub-Year+.5, y=total), data=subset(citations.sum, CollegeFac=="AGLS")) +
-  geom_vline(xintercept=0) + 
-  geom_jitter(size=1, shape=1, position=position_jitter(width=.5, height=0), alpha=.3) + 
-  geom_line(aes(group=Name), alpha=.5) + 
-  facet_wrap(~Dept1, ncol=6) + 
-  xlab("Years between hire and publication") + ylab("Papers Published/Year") + 
-  ggtitle("Yearly Publications") +
-  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_x_continuous(breaks=c(-5, 0, 5, 10))
-```
-
-In Ag & Life Sciences, publications seem to primarily increase over time, perhaps due to the laboratory-intensive nature of work in many of the AGLS departments. 
-
-
-```{r GScholarBus, fig.width=6, fig.height=5, dpi=300}
-ggplot(aes(x=year.pub-Year+.5, y=total), data=subset(citations.sum, CollegeFac=="Bus")) +
-  geom_vline(xintercept=0) + 
-  geom_jitter(size=1, shape=1, position=position_jitter(width=.5, height=0), alpha=.3) + 
-  geom_line(aes(group=Name), alpha=.5) + 
-  facet_wrap(~Dept1, ncol=3) + 
-  xlab("Years between hire and publication") + ylab("Papers Published/Year") + 
-  ggtitle("Yearly Publications") +
-  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_x_continuous(breaks=c(-5, 0, 5, 10))
-```
-
-In the business college, many individuals seem to follow the same publishing trajectory observed in other departments: publications increase from years 0-5(ish) and then decrease, however, there are relatively few individuals in this data, suggesting that the observation should be treated with some skepticism. 
-
-```{r GScholarDes, fig.width=6, fig.height=5, dpi=300}
-ggplot(aes(x=year.pub-Year+.5, y=total), data=subset(citations.sum, CollegeFac=="Des")) +
-  geom_vline(xintercept=0) + 
-  geom_jitter(size=1, shape=1, position=position_jitter(width=.5, height=0), alpha=.3) + 
-  geom_line(aes(group=Name), alpha=.5) + 
-  facet_wrap(~Dept1, ncol=3) + 
-  xlab("Years between hire and publication") + ylab("Papers Published/Year") + 
-  ggtitle("Yearly Publications") +
-  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_x_continuous(breaks=c(-5, 0, 5, 10))
-```
-
-The College of Design seems to have relatively few publications per person, per year (as indexed by Google Scholar). This scarcity of data makes drawing concludions difficult. 
-
-```{r GScholarEngr, fig.width=6, fig.height=5, dpi=300}
-ggplot(aes(x=year.pub-Year+.5, y=total), data=subset(citations.sum, CollegeFac=="Engr")) +
-  geom_vline(xintercept=0) + 
-  geom_jitter(size=1, shape=1, position=position_jitter(width=.5, height=0), alpha=.3) + 
-  geom_line(aes(group=Name), alpha=.5) + 
-  facet_wrap(~Dept1, ncol=3) + 
-  xlab("Years between hire and publication") + ylab("Papers Published/Year") + 
-  ggtitle("Yearly Publications") +
-  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_x_continuous(breaks=c(0, 5, 10)) + 
-  scale_y_continuous(breaks=c(0, 10, 20, 30))
-```
-
-The College of Engineering seems to have a slowly increasing publication rate for individuals (with considerable variability in any single year), across all departments.
-
-
-```{r GScholarHumSci, fig.width=6, fig.height=5, dpi=300}
-ggplot(aes(x=year.pub-Year+.5, y=total), data=subset(citations.sum, CollegeFac=="Hum Sci")) +
-  geom_vline(xintercept=0) + 
-  geom_jitter(size=1, shape=1, position=position_jitter(width=.5, height=0), alpha=.3) + 
-  geom_line(aes(group=Name), alpha=.5) + 
-  facet_wrap(~Dept1, ncol=3) + 
-  xlab("Years between hire and publication") + ylab("Papers Published/Year") + 
-  ggtitle("Yearly Publications") +
-  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_x_continuous(breaks=c(0, 5, 10)) + 
-  scale_y_continuous(breaks=c(0, 5, 10, 15))
-```
-
-In the College of Human Sciences, yearly variability in publications seems to outweigh any temporal trends in the number of publications per year after hire. 
-
-```{r GScholarVet, fig.width=6, fig.height=5, dpi=300}
-ggplot(aes(x=year.pub-Year+.5, y=total), data=subset(citations.sum, CollegeFac=="Vet Med")) +
-  geom_vline(xintercept=0) + 
-  geom_jitter(size=1, shape=1, position=position_jitter(width=.5, height=0), alpha=.3) + 
-  geom_line(aes(group=Name), alpha=.5) + 
-  facet_wrap(~Dept1, ncol=3) + 
-  xlab("Years between hire and publication") + ylab("Papers Published/Year") + 
-  ggtitle("Yearly Publications") +
-  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
-  scale_x_continuous(breaks=c(0, 5, 10)) + 
-  scale_y_continuous(breaks=c(0, 5, 10, 15))
-```
-
-In the College of Veterinary Medicine, publications seem to be confined to certain individuals, with most individuals publishing less than 5 papers per year that were indexed by Google Scholar. 
+Further analysis is provided in the Merged Data section. 
 
 # Analysis of Merged Data
-```{r MergeDatasetsSetup, cache=F}
-received.money <- awards %>% 
-  group_by(Investigator) %>% 
-  summarize(grant.received = sum(Award.Amount), 
-            n.awards = length(unique(Award.Number)))
-received.money$grant.received[is.na(received.money$grant.received)] <- 0
-
-submitted.proposals <- prop %>% 
-  group_by(Investigator) %>% 
-  summarize(total.proposal.money = sum(Proposal.Amount), 
-            n.proposals = length(unique(Proposal.Number)), 
-            prop.fund.pct = mean(Proposal.Status=="Funded"))
-submitted.proposals$total.proposal.money[is.na(submitted.proposals$total.proposal.money)] <- 0
-
-isuHires <- merge(hires, received.money, by.x="Name", by.y="Investigator", all.x=T, all.y=F)
-isuHires <- merge(isuHires, submitted.proposals, by.x="Name", by.y="Investigator", all.x=T, all.y=F)
-isuHires$grant.received[is.na(isuHires$grant.received)] <- 0
-isuHires$total.proposal.money[is.na(isuHires$total.proposal.money)] <- 0
-
-isuHires$ProfRankFac <- isuHires$ProfRank %>% 
-  str_replace("(Adjunct/Lecturer)|(Affiliate Prof)|(Clinician)", "Other") %>%
-  str_replace("Distg ", "") %>%
-  factor(levels=c("Asst Prof", "Assoc Prof", "Prof", "Other"), labels=c("Assistant", "Associate", "Professor", "Other"))
-
-isuHires$CollegeFac <- isuHires$College %>% factor(labels=c("AGLS", "Bus", "Des", "Engr", "Hum Sci", "LAS", "Vet Med"))
-
-isuHires$YearsAtISU <- 2015 - isuHires$Year
-
-isuHires$YearsAtISUFac <- cut_number(isuHires$YearsAtISU, n=4)
-
-# Quartiles for startup funding, by college
-startup.quantiles <- isuHires %>% group_by(CollegeFac) %>% summarize(Q1=quantile(Total.Cost, .25, type=8), Q2=quantile(Total.Cost, .5, type=8), Q3=quantile(Total.Cost, .75, type=8), Q4=quantile(Total.Cost, 1, type=8)) %>% melt(id.vars=1, measure.vars=2:ncol(.), variable.name="Quantile", value.name="Total.Cost")
-
-# Rank individual faculty startup packages by the quartile of their respective college. 
-isuHires <- isuHires %>% group_by(CollegeFac) %>% mutate(TotalCostFac = as.numeric(cut(Total.Cost, breaks=quantile(Total.Cost, probs=0:4/4))))
-isuHires$TotalCostFac[is.na(isuHires$TotalCostFac)] <- 1
-isuHires$TotalCostFac <- factor(isuHires$TotalCostFac, levels=1:4, labels=c("Startup $: Q1", "Startup $: Q2", "Startup $: Q3", "Startup $: Q4"))
-```
 
 ## Awarded Grant Funding
 We'll begin by looking at the timeline - how many years at ISU are necessary before grant applications are successful? We split this by college and faculty rank (as we'd expect that full professors who are hired should be able to command grant money sooner than new faculty). Subsequent graphs show data from hired professors (i.e. not adjuncts, affiliates, lecturers, or clinicians). 
@@ -884,4 +827,141 @@ ggplot(aes(x=YearsAtISU, y=total.proposal.money, shape=TotalCostFac, color=Total
   scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7, 1e8), limits=c(0, 3e8)) + 
   scale_x_continuous(breaks=c(0, 5, 10))
 ```
+
+## Publications and Startup Costs
+
+We initially consider the effect that startup packages have on the number of publications (as measured by results aggregated in Google Scholar). Publications here include journal articles, books, conference proceedings (such as IEEE) and miscellaneous other research articles. 
+
+
+```{r GScholarCollegeStartup, fig.width=6, fig.height=4, dpi=300}
+ggplot(aes(x=Total.Cost, y=(total.pubs)/(YearsAtISU+1)), data=subset(citations.total, Total.Cost>0 & ProfRankFac!="Other")) +
+  geom_smooth(aes(ymin=pmax(0, ..ymin..)), span=.9, level=.9) +
+  geom_point(shape=1, size=2, alpha=.25, guide=F) + 
+  facet_wrap(~CollegeFac, scales="free", ncol=4) + 
+  xlab("Startup Cost") + ylab("Yearly Publications") + 
+  ggtitle("Publication Rate, By College and Years at ISU") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(trans="log10")
+```
+
+We see that in general, yearly publications are tenuously related to startup package cost. Upward trends in Engineering and Human Sciences (and the downward trend in Design) are attributable generally to one or two outliers. In LAS, there is some increase in average yearly publications initially (perhaps because of the association between Department, Startup Costs, and publication expectations), but this flattens out fairly quickly. 
+
+### Analysis of Publications by College
+
+```{r GScholarLAS, fig.width=6, fig.height=5, dpi=300}
+ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), data=subset(citations.yearly, CollegeFac=="LAS")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
+
+In some LAS departments, like Computer Science, publication frequency does not appear to be overly impacted by career stage. In other departments, such as Chemistry, publications increase over time, and then may decrease after 5-6 years. Departments such as Music do not seem to have much publication pressure (at least not which would appear on Google Scholar). In the statistics department, most hires publish at least 2 papers per year throughout their careers, but after 3-5 years, some professors begin publishing at a much higher rate, perhaps due to increased collaboration (in fact, in the statistics department, papers with more than 6 authors are extremely uncommon until year 4-5 at ISU). 
+
+In all departments, however, it seems that differential startup funding does not impact publication frequency or trajectory. 
+
+```{r GScholarAGLS, fig.width=6, fig.height=5, dpi=300}
+ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, atISU & CollegeFac=="AGLS")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
+
+In Ag & Life Sciences, publication trends seem to be highly department-dependent. In Animal Science (and, to a lesser degree, Agronomy), publications seem to primarily increase over time. In other departments, such as NREM and ABE, publications do not seem to increase over time, but are highly variable in any given year. In all departments, it does not appear that there is a significant relationship between startup funding and publishing trajectory.
+
+
+```{r GScholarBus, fig.width=6, fig.height=4, dpi=300}
+ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, atISU & CollegeFac=="Bus")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
+
+In the business college, publications at (on average) `r round(with(subset(citations.total, CollegeFac=="Bus"), mean(total.pubs)/mean(YearsAtISU)), 2)` publications per year. As there are relatively few hires who have been at ISU for more than 5 years, it is difficult to draw any conclusions about publishing trajectories over time. 
+
+```{r GScholarDes, fig.width=6, fig.height=5, dpi=300}
+ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, atISU & CollegeFac=="Des")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
+
+The College of Design seems to have relatively few publications per person, per year (as indexed by Google Scholar), in addition to relatively few hires between 2005-2015. This scarcity of data makes drawing any concludions difficult. 
+
+```{r GScholarEngr, fig.width=6, fig.height=5, dpi=300}
+ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, atISU & CollegeFac=="Engr")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
+
+The College of Engineering seems to have a constant (or perhaps slowly increasing) publication rate for individuals (with considerable variability in any single year), across all departments. The Materials Science & Engineering department is notable as there seem to be two types of hires; those who publish in great volume, and those who do not publish more than 2-3 papers per year after 5 years at ISU. 
+
+There may be some small association between startup funding and publication trajectory within some departments, but it does not appear to be a simple relationship, and we do not have sufficient sample size within any single department to make strong conclusions.  
+
+
+```{r GScholarHumSci, fig.width=6, fig.height=5, dpi=300}
+ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, atISU & CollegeFac=="Hum Sci")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
+In the College of Human Sciences, variability in yearly publications seems to outweigh any temporal or startup funding related trends in most departments. 
+
+```{r GScholarVet, fig.width=6, fig.height=5, dpi=300}
+ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, atISU & CollegeFac=="Vet Med")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile\n(by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile\n(by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=7, override.aes=list(size=4)), color=guide_legend(ncol=7)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
+
+In the College of Veterinary Medicine, publications seem to be confined to certain individuals, with most individuals publishing less than 5 papers per year that were indexed by Google Scholar. It may be (particularly in VDPAM) that individuals who are awarded larger startup packages are more likely to publish many papers each year. 
+
 

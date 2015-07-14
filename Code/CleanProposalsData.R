@@ -201,3 +201,6 @@ prop$Investigator <-  prop$Investigator %>%
 
 # Cleaning up -------------------------------------------------------------------
 rm(var.cat, var.date, var.num, type.map, type_fed.map, prop.11, prop.05.tot, prop.05)
+# -------------------------------------------------------------------------------
+
+save(prop, file="Data/Proposals.RData")

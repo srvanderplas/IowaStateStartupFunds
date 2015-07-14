@@ -226,3 +226,6 @@ awards <- filter(awards, Award.Status != "Executed")
 
 # Cleaning up -------------------------------------------------------------------
 rm(awards2, var.cat, var.date, var.num, type.map, type_fed.map, awards.11, awards.05.tot, awards.05)
+# -------------------------------------------------------------------------------
+
+save(awards, file="Data/Awards.RData")

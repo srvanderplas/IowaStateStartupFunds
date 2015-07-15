@@ -38,8 +38,6 @@ knitr::opts_knit$set(root.dir="../../IowaStateStartupFunds/")
 log_one_trans <- function() trans_new("log_one", function(x) log10(x+1), function(x) 10^x-1, domain=c(0, Inf))
 ```
 
-# 
-
 Datasets from OSPA contain information on proposals and awards from 2005-2010 and 2010-2015 (4 total databases). 
 
 ```{r OVPRdata, cache=F}
@@ -106,7 +104,8 @@ isuHires$TotalCostDecile <- factor(isuHires$TotalCostDecile, levels=1:10)
 ```
 
 The following sections are intended to explore some of the limitations of the Proposal and Award datasets. They are not essential for understanding the subsequent analysis. 
-## Proposals
+
+# Proposals
 
 ```{r ProposalExploration}
 prop$Source2 <- factor(prop$Source, labels=c("FY06-FY10", "FY11-FY16"), levels=c("Proposals FY06 to FY10.csv", "KC Investigator Proposal ALL 06072015.csv"))
@@ -205,7 +204,7 @@ ggplot(data=prop) +
 rm(prop.span, prop.unique)
 ```
 
-## Awards
+# Awards
 
 ```{r AwardExploration}
 awards$Source2 <- factor(awards$Source, labels=c("FY06-FY10", "FY11-FY16"), levels=c("Awards FY06 to FY10.csv", "KC Investigator Award ALL 06072015.csv"))

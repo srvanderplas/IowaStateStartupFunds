@@ -1,0 +1,274 @@
+---
+title: "Office of Sponsored Programs Administration Data"
+date: "July 15, 2015"
+output: 
+  knitrBootstrap:::simple_document:
+    theme: cerulean
+    highlight: idea
+    menu: FALSE
+    clean_supporting: TRUE
+    toc: TRUE
+---
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+library(htmltools)
+library(stringr) # for string manipulation
+library(lubridate) # for date manipulation
+library(reshape2) # for reshaping data
+library(plyr) # for rbind.fill function
+library(dplyr) # for %>% operator
+library(ggplot2)
+library(scales)
+# s0 <- knitr::knit_hooks$get('source')
+# knitr::knit_hooks$set(
+#   list(
+#     source=function(x,options){
+#       if(is.null(options$class)) s0(x, options)
+#       else
+#         tags$button(class=c())
+#     }
+#   )
+# )
+# 
+knitr::opts_chunk$set(bootstrap.show.code=FALSE, bootstrap.show.output=FALSE, bootstrap.show.message=FALSE, warning=F, message=F, out.width="100%", cache=T, echo=F, dpi=300)
+knitr::opts_knit$set(root.dir="../../IowaStateStartupFunds/")
+
+# Transformation - log(x+1) to deal with zero data 
+log_one_trans <- function() trans_new("log_one", function(x) log10(x+1), function(x) 10^x-1, domain=c(0, Inf))
+```
+
+# 
+
+Datasets from OSPA contain information on proposals and awards from 2005-2010 and 2010-2015 (4 total databases). 
+
+```{r OVPRdata, cache=F}
+# source("Code/CleanStartupFundingData.R")
+load("Data/Hires.RData")
+load("Data/FundingStartup.RData")
+```
+
+```{r OSPAdata, cache=F}
+# source("Code/CleanAwardsData.R")
+# source("Code/CleanProposalsData.R")
+load("Data/Awards.RData")
+load("Data/Proposals.RData")
+```
+
+```{r MergeDatasetsSetup, cache=F}
+received.money <- awards %>% 
+  group_by(Investigator) %>% 
+  summarize(grant.received = sum(Award.Amount), 
+            n.awards = length(unique(Award.Number)))
+received.money$grant.received[is.na(received.money$grant.received)] <- 0
+
+submitted.proposals <- prop %>% 
+  group_by(Investigator) %>% 
+  summarize(total.proposal.money = sum(Proposal.Amount), 
+            n.proposals = length(unique(Proposal.Number)), 
+            prop.fund.pct = mean(Proposal.Status=="Funded"))
+submitted.proposals$total.proposal.money[is.na(submitted.proposals$total.proposal.money)] <- 0
+
+isuHires <- merge(hires, received.money, by.x="Name", by.y="Investigator", all.x=T, all.y=F)
+isuHires <- merge(isuHires, submitted.proposals, by.x="Name", by.y="Investigator", all.x=T, all.y=F)
+isuHires$grant.received[is.na(isuHires$grant.received)] <- 0
+isuHires$total.proposal.money[is.na(isuHires$total.proposal.money)] <- 0
+
+isuHires$ProfRankFac <- isuHires$ProfRank %>% 
+  str_replace("(Adjunct/Lecturer)|(Affiliate Prof)|(Clinician)", "Other") %>%
+  str_replace("Distg ", "") %>%
+  factor(levels=c("Asst Prof", "Assoc Prof", "Prof", "Other"), labels=c("Assistant", "Associate", "Professor", "Other"))
+
+isuHires$CollegeFac <- isuHires$College %>% factor(labels=c("AGLS", "Bus", "Des", "Engr", "Hum Sci", "LAS", "Vet Med"))
+
+isuHires$YearsAtISU <- 2015 - isuHires$Year
+
+isuHires$YearsAtISUFac <- cut_number(isuHires$YearsAtISU, n=4)
+
+# Quartiles for startup funding, by college
+startup.quantiles <- isuHires %>% 
+  group_by(CollegeFac) %>% 
+  summarize(Q1=quantile(Total.Cost, .25, type=8), 
+            Q2=quantile(Total.Cost, .5, type=8), 
+            Q3=quantile(Total.Cost, .75, type=8), 
+            Q4=quantile(Total.Cost, 1, type=8)) %>% 
+  melt(id.vars=1, measure.vars=2:ncol(.), variable.name="Quantile", value.name="Total.Cost")
+
+# Rank individual faculty startup packages by the quartile of their respective college. 
+isuHires <- isuHires %>% 
+  group_by(CollegeFac) %>%
+  mutate(TotalCostFac = as.numeric(cut(Total.Cost, breaks=c(-1, quantile(Total.Cost, probs=1:4/4)))), 
+         TotalCostDecile = as.numeric(cut(Total.Cost, breaks=c(-1, quantile(Total.Cost, probs=1:10/10)))))
+isuHires$TotalCostFac[is.na(isuHires$TotalCostFac)] <- 1
+isuHires$TotalCostDecile[is.na(isuHires$TotalCostDecile)] <- 1
+isuHires$TotalCostFac <- factor(isuHires$TotalCostFac, levels=1:4, labels=c("Startup $: Q1", "Startup $: Q2", "Startup $: Q3", "Startup $: Q4"))
+isuHires$TotalCostDecile <- factor(isuHires$TotalCostDecile, levels=1:10)
+```
+
+The following sections are intended to explore some of the limitations of the Proposal and Award datasets. They are not essential for understanding the subsequent analysis. 
+## Proposals
+
+```{r ProposalExploration}
+prop$Source2 <- factor(prop$Source, labels=c("FY06-FY10", "FY11-FY16"), levels=c("Proposals FY06 to FY10.csv", "KC Investigator Proposal ALL 06072015.csv"))
+```
+
+Some categories of proposals occur in FY06-FY10 but not in FY11-FY16. 
+```{r ProposalActivity, fig.width=8, fig.height=4, dpi=300}
+qplot(Activity.Type, data=prop, color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) + 
+  xlab("Activity Type") + ylab("Proposal Count") + ggtitle("Proposal Activities") + 
+  theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1))
+```
+
+We do not have proposal type data for FY06-FY10. This would be useful to have, but does not seem to be present in the database. 
+```{r ProposalTypes, fig.width=8, fig.height=4, dpi=300}
+qplot(Proposal.Type, data=prop, color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) + 
+  xlab("Proposal Type") + ylab("Proposal Count") + ggtitle("Proposal Type") + 
+  theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1))
+```
+
+Similarly, we don't have information on the funding type for FY11-FY16. It may be useful to exclude Master Agreements, etc. from the data if no similar category exists in FY11-FY16. 
+
+```{r FundingTypes, fig.width=8, fig.height=4, dpi=300}
+qplot(Grant.Type, data=prop, color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) + 
+  xlab("Funding Type") + ylab("Proposal Count") + ggtitle("Funding Type") + 
+  theme_bw()  + theme(legend.position="bottom", axis.text.x=element_text(angle=45, hjust=1))
+```
+
+Other differences between the two proposal datasets are unsurprising, such as that there are no pending proposals from FY06-FY10. 
+```{r ProposalStatus, fig.width=8, fig.height=4, dpi=300}
+qplot(Proposal.Status, fill=Source2, position="stack", data=prop) +
+  scale_fill_discrete("Data Source") + 
+  xlab("Proposal Status") + ylab("Proposal Count") + ggtitle("Proposal Status") + 
+  theme_bw() + theme(legend.position="bottom")
+```
+
+Proposals are roughly evenly distributed over time, with a slight spike that corresponds to April - July 2009 (presumably, the American Recovery and Reinvestment Act proposals). 
+```{r ProposalsOverTime, fig.width=8, fig.height=4, dpi=300}
+prop.unique <- prop %>% group_by(Proposal.Number, Submit.Date, Source2) %>% summarise(ct=length(Proposal.Number))
+
+ggplot() + 
+  geom_histogram(aes(x=floor_date(Submit.Date, "month"), fill=Source2), color="black", position="stack", data=prop.unique) + 
+  xlab("Submission Date") + ylab("Count") + ggtitle("Number of Proposals Submitted") + 
+  theme_bw() + theme(legend.position="bottom")
+
+rm(prop.unique)
+```
+
+Next, we consider the timeline for each proposal. Proposals have a submission date, a start date (presumably, when funding would begin), and an end date (when funding would cease). 
+```{r ProposalTimeline, fig.width=8, fig.height=4, dpi=300}
+prop.span <- melt(prop, id.vars = c("Proposal.Number", "Source2", "Proposal.Title"), measure.vars=c("Start.Date", "End.Date", "Submit.Date"), value.name = "Date", variable.name = "Proposal.Span")
+prop.span$Proposal.Span <- factor(prop.span$Proposal.Span, levels=c("Submit.Date", "Start.Date", "End.Date"))
+
+ggplot(data=prop.span) + 
+  geom_histogram(aes(x=floor_date(Date, "month"), fill=Source2), 
+               position="stack", adjust=1.25, trim=T, binwidth=15*60*24*365) + 
+  facet_grid(Proposal.Span~.) + 
+  theme_bw() + 
+  scale_x_datetime(limits=c(mdy("07012001"), mdy("07012026")), breaks=date_breaks("5 years")) + 
+  scale_fill_discrete("Data Source") + xlab("Date") + ylab("Density") + ggtitle("Proposal Timeline") + 
+  theme(legend.position="bottom") 
+```
+There is clearly some periodicity in the funding cycle (end dates, in particular) likely caused by differences between the academic year, government fiscal year, and calendar year. 
+
+Examining this from a slightly different perspective, we consider the difference between proposal submission dates and the start and end dates in those proposals. 
+```{r ProposalStartEnd, fig.width=8, fig.height=4, dpi=300}
+prop.span <- melt(prop, id.vars = c("Proposal.Number", "Source2", "Proposal.Title", "Submit.Date"), measure.vars=c("Start.Date", "End.Date"), value.name = "Date", variable.name = "Proposal.Span")
+prop.span$Proposal.Span <- factor(prop.span$Proposal.Span, levels=c("Start.Date", "End.Date"))
+prop.span$FundingLag <- with(prop.span, difftime(Date, Submit.Date, units="days")) 
+prop.span$FundingLag <- as.numeric(prop.span$FundingLag)/(365.25) # convert to years
+
+ggplot(data=prop.span) + 
+  geom_histogram(aes(x=FundingLag), fill="grey", color="black", binwidth=.25, inherit.aes=F) + 
+  facet_wrap(~Proposal.Span, scales="free") + 
+  theme_bw() + 
+  scale_x_continuous(limits=c(-1, 10), breaks=0:9) + 
+  xlab("Years from Proposal Submission Date") + ylab("Count") + ggtitle("Proposal Duration") + 
+  theme(legend.position="bottom") 
+
+```
+`r round(sum(subset(prop.span, Proposal.Span=="Start.Date")$FundingLag<0, na.rm=T)/sum(!is.na(subset(prop.span, Proposal.Span=="Start.Date")$FundingLag), na.rm=T)*100)`% of proposals appear to start before they are submitted, and `r round(sum(subset(prop.span, Proposal.Span=="End.Date")$FundingLag<=0, na.rm=T)/sum(!is.na(subset(prop.span, Proposal.Span=="Start.Date")$FundingLag), na.rm=T)*100, 2)`% also end before they are submitted. 
+
+Looking at the funding duration directly, we see that proposals tend to provide funding over 1-5 years, though very few do extend 10 or more years into the future. A few proposals extend 100 years into the future; this situation occurs when an amount of money is donated for some purpose and can be used at any point. 
+```{r ProposalDuration, fig.width=8, fig.height=4, dpi=300}
+ggplot(data=prop) + 
+  geom_histogram(aes(x=as.numeric(difftime(End.Date, Start.Date, units="days")/365.25)), 
+                 binwidth=.25, color="black", fill="grey", right=T) + 
+  scale_x_continuous("Proposal Duration", limits=c(0, 10), breaks=0:10) + 
+  ylab("Count") + ggtitle("Duration of Proposed Funding") + theme_bw() + 
+  theme(legend.position="bottom") 
+```
+
+```{r ProposalCleanUp}
+rm(prop.span, prop.unique)
+```
+
+## Awards
+
+```{r AwardExploration}
+awards$Source2 <- factor(awards$Source, labels=c("FY06-FY10", "FY11-FY16"), levels=c("Awards FY06 to FY10.csv", "KC Investigator Award ALL 06072015.csv"))
+```
+
+Some award activity categories were created for FY11-16: Student Services, Institutional Support, and Academic Support. Other categories have been combined, for instance, the "Dept/Admin Support" category in FY06-FY10 has been combined into the Public Service category, but the overall funding level has declined significantly. 
+```{r AwardActivity, fig.width=6, fig.height=8, out.width="80%"}
+qplot(Activity.Type, data=awards, color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) + coord_flip() +
+  xlab("Activity Type") + ylab("Award Count") + ggtitle("Funded Award Activities") + 
+  theme_bw()  + theme(legend.position="bottom")
+```
+Similarly, some award types that were not tracked for FY06-FY10 are tracked in FY11-FY16. 
+```{r AwardType, fig.width=8, fig.height=8, out.width="100%"}
+qplot(Award.Type, data=subset(awards, !is.na(Award.Type)), color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2, ncol=2) +  coord_flip() +
+  xlab("Award Type") + ylab("Award Count") + ggtitle("Award Type") + 
+  theme_bw()  + theme(legend.position="bottom")
+```
+Considering the timeline of awards, we find some interesting data artifacts:
+```{r AwardSpan, fig.width=6, fig.height=6}
+award.span <- melt(awards, id.vars = c("Award.Number", "Source2", "Award.Title"), measure.vars=c("Start.Date", "End.Date"), value.name = "Date", variable.name = "Award.Span")
+award.span$Award.Span <- factor(award.span$Award.Span, levels=c("Start.Date", "End.Date"))
+
+ggplot(data=award.span) + 
+  geom_histogram(aes(x=floor_date(Date, "month"), fill=Source2), 
+               position="stack", adjust=1.25, trim=T, binwidth=15*60*24*365) + 
+  facet_grid(Award.Span~.) + 
+  theme_bw() + 
+  scale_x_datetime(limits=c(mdy("07012001"), mdy("07012026")), breaks=date_breaks("5 years")) + 
+  scale_fill_discrete("Data Source") + xlab("Date") + ylab("Count") + ggtitle("Award Timeline")
+
+rm(award.span)
+```
+Some awards from FY11-16 started in FY05-FY10; this is likely because "Start.Date" and "End.Date" variables have slightly different meanings in the two datasets - in FY05-FY10, these dates indicate payement dates, where in FY11-FY16, these dates are based on the proposal itself. 
+```{r AwardLength, fig.width=6, fig.height=4}
+ggplot(data=awards) + 
+  geom_histogram(aes(x=as.numeric(difftime(End.Date, Start.Date, units="days"))/365.25, fill=Source2), 
+                 color="black", binwidth=.25) + 
+  scale_x_continuous("Years of Funding", limits=c(-1, 10), breaks=0:9) + 
+  scale_fill_discrete("Data Source") + 
+  xlab("Date") + ylab("Count") + ggtitle("Funding Span") + 
+  theme(legend.position="bottom") + theme_bw()
+```
+The length of funding also differs between the two datasets as a result of the difference in start date calculations. 
+
+Award status differs between the two files as well; this is to be expected (more Active awards should be in the FY11-FY16 data, for instance). "Final" and "Executed" awards are present in FY11-FY16; I am currently tracking down what those statuses imply. 
+```{r AwardStatus, fig.width=6, fig.height=4}
+ggplot(data=awards) +  
+  geom_histogram(aes(x=Award.Status), color=I("black"), fill=I("grey")) + 
+  facet_wrap(~Source2) + coord_flip() + 
+  xlab("Award Status") + ylab("Count") + ggtitle("Award Status") + 
+  theme_bw() + theme(legend.position="bottom")
+```
+
+Finally, we explore the amount of grant funding by year. Grants spanning many years are allocated to the midpoint of the funding range. 
+```{r AwardAmounts, fig.width=6, fig.height=4}
+ggplot(data=awards) + 
+  geom_histogram(aes(x=rowMeans(cbind(decimal_date(Start.Date), decimal_date(End.Date))), weight=Award.Amount), 
+                 color="black", fill="grey") + 
+  scale_fill_discrete("Data Source") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 1e3, 1e5, 1e7, 1e9, 1e11)) +
+  # scale_x_datetime(limits=mdy("01-01-2004", "01-01-2016")) + 
+  xlab("Date") + ylab("Amount of Funding ($)") + ggtitle("Total Award Funding Over Time")+ 
+  theme_bw() + theme(legend.position="bottom")
+```

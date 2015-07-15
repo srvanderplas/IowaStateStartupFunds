@@ -1,0 +1,425 @@
+---
+title: "Office of the Vice President for Research Data"
+date: "July 15, 2015"
+output: 
+  knitrBootstrap:::simple_document:
+    theme: cerulean
+    highlight: idea
+    menu: FALSE
+    clean_supporting: TRUE
+    toc: TRUE
+---
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+library(htmltools)
+library(stringr) # for string manipulation
+library(lubridate) # for date manipulation
+library(reshape2) # for reshaping data
+library(plyr) # for rbind.fill function
+library(dplyr) # for %>% operator
+library(ggplot2)
+library(scales)
+# s0 <- knitr::knit_hooks$get('source')
+# knitr::knit_hooks$set(
+#   list(
+#     source=function(x,options){
+#       if(is.null(options$class)) s0(x, options)
+#       else
+#         tags$button(class=c())
+#     }
+#   )
+# )
+# 
+knitr::opts_chunk$set(bootstrap.show.code=FALSE, bootstrap.show.output=FALSE, bootstrap.show.message=FALSE, warning=F, message=F, out.width="100%", cache=T, echo=F, dpi=300)
+knitr::opts_knit$set(root.dir="../../IowaStateStartupFunds/")
+
+# Transformation - log(x+1) to deal with zero data 
+log_one_trans <- function() trans_new("log_one", function(x) log10(x+1), function(x) 10^x-1, domain=c(0, Inf))
+```
+
+```{r OVPRdata, cache=F}
+# source("Code/CleanStartupFundingData.R")
+load("Data/Hires.RData")
+load("Data/FundingStartup.RData")
+```
+
+# Total Startup Package Cost
+```{r TotalCost, echo=F, fig.width=9, fig.height=5, fig.cap="Total Startup Package Cost, by College"}
+qplot(Year, Total.Cost, color=Dept1, data=hires, geom="jitter", shape=I(1)) +
+scale_y_log10() +
+scale_color_discrete(guide="none") +
+ggtitle("Total Startup Package Cost")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+```
+
+This graph shows the startup funding for each college over time, with colored points indicating each department. The College of Human Sciences seems to have experienced an increase in startup funding, but most other colleges have maintained similar startup funding ranges over time. We also note that there are several hires in the College of Veterinary Medicine with no startup packages; these hires were for Clinician and Adjunct/Lecturer positions. 
+
+Next, we explore the components of the startup packages and how those allocations have changed over time. 
+# Computing Expenses
+
+```{r ComputingExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for computers"}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Computer.peripherals"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated to computer equip.")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+```
+This graph shows the proportion of startup package funding allocated to computer equipment and peripherals, over time. Point color again indicates department, so that any department-level trends are potentially visible. The most noticable changes are present in the Colleges of Ag & Life Science, Human Sciences, Veterinary Medicine, and Engineering (to a lesser degree): In these colleges, there are some hires whose funding package is dominated by computer equipment, but this becomes less common over time. 
+
+The next graph examines the amount of startup funding allocated to computer equipment over time. We have utilized a square-root transformation on the y-axis to display both the $1000 allocations and the $100K allocations in the same plot more easily.
+```{r ComputingExpenseAmount, echo=F, fig.width=8, fig.height=4, fig.cap="Amount allocated for computers"}
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Computer.peripherals"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Amount of startup funds allocated for computer equip.")  +
+  scale_y_sqrt(breaks=c(0, 1000, 5000, 10000, 50000, 100000), label=c("0", "$1000", "$2500", "$10K", "$50K", "$100K")) +
+ylab("Amount") + 
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+We see that most colleges provide enough startup funding for a basic laptop or desktop system (if that), but higher awards are common in Engineering (where lab equipment, sample probes, etc. are potentially part of the computing category) and Ag & Life Science (where specific computing needs for sequence analysis, etc. can be quite expensive). 
+
+In Ag & Life Science, the computer funding allocation may have decreased due to Moore's law (it's cheaper to get computers that can process genetic data now than it was in 2005). Engineering allocations seem to be somewhat department-related (clustering of green and blue values, in particular). The business school seems remarkably standardized - the amount decreased in 2011-2013, but otherwise has been at approximately the same level (with extremely low variance). 
+
+Examining the College of Engineering on a department level, we find that trends in computer allocation amounts are largely department-dependent. This graph again shows the funding amount on the y-axis (using a linear scale this time), the year on the x-axis (points have been "jittered" to prevent overplotting). In addition, the regression line shown models the funding amount over time (using poisson regression). 
+```{r ComputingExpenseEngineering, echo=F, fig.width=8, fig.height=4, fig.cap="Amount allocated for computers in the College of Engineering"}
+qplot(Year, Amount, data=subset(startup.package, College=="Engineering" & Item=="Computer.peripherals"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+geom_smooth(method="glm", family=poisson(link = "log")) +
+ggtitle("Amount of startup funds allocated for computer equip. (Engineering)")  +
+  # scale_y_sqrt(breaks=c(0, 1000, 5000, 10000, 100000), label=c("0", "$1000", "$2500", "$10K", "$100K")) +
+ylab("Amount") + 
+theme_bw() +
+facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+We can see that in many departments, the computer allocation has increased over time. The Mechanical Engineering department in particular has seen a dramatic increease in startup computer funding over time, such that hires after 2013 receive at least $15K in computer funding. The Aerospace Engineering department shows a similar trend (though not all hires receive higher computer funding in that department). The Materials Science & Engineering department is also interesting; while most hires received minimal computer funding, four hires received more funding, with the hires before 2010 receiveing over $100K  in funding for computer equipment. This could be happenstance, but may also be indicative of a department composed of computational and non-computational members. 
+
+We will similarly explore the College of Ag & Life Sciences to determine whether computer equipment funding has changed on a department level over time. 
+```{r ComputingExpenseAGLS, echo=F, fig.width=8, fig.height=5, fig.cap="Amount allocated for computers in the College of Ag & Life Sciences"}
+tmp <- subset(startup.package, College=="Ag & Life Science" & Item=="Computer.peripherals") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, Dept1=.$Dept1, Year=seq(2004.5, 2015.5, .2), Amount=predict(.$model, newdata=data.frame(Year=seq(2004.5, 2015.5, .2)), type="response"), converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1=="EEOB" | tmp$Dept1=="Stat"] <- NA
+
+qplot(Year, Amount, data=subset(startup.package, College=="Ag & Life Science" & Item=="Computer.peripherals"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), color="blue", data=tmp) +
+  ggtitle("Amount of startup funds allocated for computer equip. (Ag & Life Sciences)")  +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+Again, we have the amount of startup funding dedicated to computer equipment on the y-axis, and time of hire on the x-axis. Departmental hires are shown as points, with an overall poisson regression line (where possible) shown in blue. Computer startup funding for ABE and PLPM departments has increased over time, while startup funding for computer equipment in several other departments has decreased over time (AgEd, Econ, BBMB, ENT, Hort, Soc). 
+
+Finally, we examine the College of Human Sciences at the deparment level
+```{r ComputingExpenseHumSci, echo=F, fig.width=8, fig.height=5, fig.cap="Amount allocated for computers in the College of Human Sciences"}
+tmp <- subset(startup.package, College=="Hum Sci" & Item=="Computer.peripherals") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, Dept1=.$Dept1, Year=seq(2004.5, 2015.5, .2), Amount=predict(.$model, newdata=data.frame(Year=seq(2004.5, 2015.5, .2)), type="response"), converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1=="EEOB" | tmp$Dept1=="Stat"] <- NA
+
+qplot(Year, Amount, data=subset(startup.package, College=="Hum Sci" & Item=="Computer.peripherals"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), color="blue", data=tmp) +
+  ggtitle("Amount of startup funds allocated for computer equip. (Human Sciences)")  +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+As seen in other colleges, startup funding for computers in some departments has increaseed over time (Kinesiology, AESHM, C&I) while funding in other departments has decreased over time (SOE, FSHN, HDFS). Overall, this has resulted in a slight increase in startup funding for the college. 
+
+# Lab Space/Equipment Expenses
+
+Next, we consider startup funding for lab space and equipment. We expect that lab space is a large component of startup packages within some colleges (Ag & Life Science, Engineering, LAS), and that even within colleges, funding levels may vary by department. 
+
+First, we examine the proportion of the startup package allocated to lab space and equipment over time, by college. In Liberal Arts & Sciences, this proportion seems to decrease (for the few LAS hires who received startup funding for lab space and equipment), but in other colleges this seems to have remained fairly consistent over time. 
+```{r LabExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for lab space and equipment."}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Lab.space.equipment"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated to lab space/equip.")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+```
+
+Next, we consider the amount of startup funding allocated for lab space and equipment over time. As before, the raw amount of funding in LAS has decreased over time for those in LAS who require lab space. In Engineering, recent hires have all been provided funding for lab space and equipment, in contrast with previous years, where many hires were not provided with such funding. 
+
+```{r LabExpenseAmount, echo=F, fig.width=8, fig.height=5, fig.cap="Amount allocated for lab space and equpment"}
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Lab.space.equipment"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Amount of startup funds allocated for lab space/equip.")  +
+  scale_y_sqrt(breaks=c(0, 10, 1000, 1e4, 1e5, 5e5, 1e6, 1e7, 1e8)) +
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+We next consider the department-level funding for each of the colleges where lab space and funding is common. 
+
+We begin with the College of Ag & Life Sciences. In many departments, the funding for lab space has not changed significantly over time. Startup funding for lab space has increased in Horticulture, NREM, and PLPM over the past 10 years, while funding for lab space in GDCB, ENT, and ABE have decreased over the past decade. 
+```{r LabFundingAGLS, echo=F, fig.width=8, fig.height=5, fig.cap="Amount allocated for Lab and Equipment Funding in the College of Ag & Life Sciences"}
+tmp <- subset(startup.package, College=="Ag & Life Science" & Item=="Lab.space.equipment") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, Dept1=.$Dept1, Year=seq(2004.5, 2015.5, .2), Amount=predict(.$model, newdata=data.frame(Year=seq(2004.5, 2015.5, .2)), type="response"), converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1=="EEOB" | tmp$Dept1=="Stat" | tmp$Dept1=="Econ"] <- NA
+
+qplot(Year, Amount, data=subset(startup.package, College=="Ag & Life Science" & Item=="Lab.space.equipment"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), color="blue", data=tmp) +
+  ggtitle("Amount of startup funds allocated for lab space and equip. (Ag & Life Sciences)")  +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+Next, we consider the College of Engineering. Interestingly, the ABE department (Ag & Biological Engineering) is shared across the College of Engineering and the College of Ag & Life Sciences, and while funding for lab space decreased in AGLS for the ABE department over the past decade, lab funding for hires in the ABE department increased in the College of Engineering. Lab funding also increased for the ECpE, CBE, and MSE departments, and decreased for the IMSE and AerE departments. This may reflect changes in discipline norms (i.e. research that once required a lab can now be conducted with computer simulations) in addition to changes in departmental funding policy. 
+```{r LabFundingEngr, echo=F, fig.width=8, fig.height=5, fig.cap="Amount allocated for Lab and Equipment Funding in the College of Engineering"}
+tmp <- subset(startup.package, College=="Engineering" & Item=="Lab.space.equipment") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, Dept1=.$Dept1, Year=seq(2004.5, 2015.5, .2), Amount=predict(.$model, newdata=data.frame(Year=seq(2004.5, 2015.5, .2)), type="response"), converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+
+qplot(Year, Amount, data=subset(startup.package, College=="Engineering" & Item=="Lab.space.equipment"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), color="blue", data=tmp) +
+  ggtitle("Amount of startup funds allocated for lab space and equip. (Engineering)")  +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+In the College of Human Sciences, startup funding for lab equipment has increased in many departments, decreasing only in the C&I department (and that decrease could well be a result of random chance). The Kinesiology and FSHN departments show a universal increase in startup funding for equipment and lab space, while the AESHM department has increased funding for only some hires (most hires still receive no funding for lab space and equipment). 
+```{r LabFundingHumSci, echo=F, fig.width=8, fig.height=5, fig.cap="Amount allocated for Lab and Equipment Funding in the College of Human Sciences"}
+tmp <- subset(startup.package, College=="Hum Sci" & Item=="Lab.space.equipment") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, Dept1=.$Dept1, Year=seq(2004.5, 2015.5, .2), Amount=predict(.$model, newdata=data.frame(Year=seq(2004.5, 2015.5, .2)), type="response"), converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1=="C&I" | tmp$Dept1=="HDFS"] <- NA
+
+qplot(Year, Amount, data=subset(startup.package, College=="Hum Sci" & Item=="Lab.space.equipment"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), color="blue", data=tmp) +
+  ggtitle("Amount of startup funds allocated for lab space and equip. (Human Sciences)")  +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+Finally, in the College of Liberal Arts & Science, startup funding for lab equipment is only common in the "Science" portion of the college, and has declined across all of those departments. 
+```{r LabFundingLAS, echo=F, fig.width=8, fig.height=8, fig.cap="Amount allocated for Lab and Equipment Funding in the College of Liberal Arts & Sciences"}
+tmp <- subset(startup.package, College=="Liberal Arts & Science" & Item=="Lab.space.equipment") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1%in%c("Econ","Anthro", "Engl", "FL&L", "GeAt", "Math", "Pol Sci", "Soc", "WL&C", "Music")] <- NA
+# tmp$Amount[tmp$Dept1=="Stat" & Year<2007.5] <- NA
+
+qplot(Year, Amount, data=subset(startup.package, College=="Liberal Arts & Science" & Item=="Lab.space.equipment"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), color="blue", data=tmp) +
+  ggtitle("Amount of startup funds allocated for lab space and equip. (Liberal Arts & Sciences)")  +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+
+# Graduate Assistant Expenses
+Next, we examine the amount of startup funding allocated to graduate assistant support. This is expected to vary by department and college, due to norms in different research areas.  
+```{r GradExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for graduate assistant support."}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Graduate.assistants"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+  geom_smooth(aes(x=Year, y=Amount/Total.Cost), color=I("black"), data=subset(startup.package, Item=="Graduate.assistants"), se=F, method="glm") + 
+  ylab("Proportion of Total Startup Funding") + 
+ggtitle("Proportion of package allocated for graduate assistants")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+```
+Above, the x-axis represents the hire date, and the y axis shows the proportion of startup funding allocated to graduate assistant support. The College of Human Sciences is allocating proportionately more money to graduate student support now than was common 10 years ago, though the Business, Design, and Engineering colleges have also increased startup funding for graduate student support. 
+
+Next, examining the raw amount of funding allocated for graduate student support, we find that the same trend generally holds. In the graph below, funding amount is shown on the y-axis, with a poisson regression line fit to the funding amount. Again, the College of Human Sciences has increased funding amounts over the past decade, followed by the College of Design, College of Engineering, and College of Business. There may have been a slight increase in funding amounts for the College of Liberal Arts and Sciences as well, but the increase at the college level is fairly small. 
+
+```{r GradExpenseAmt, echo=F, fig.width=8, fig.height=5, fig.cap="Amount allocated for graduate assistant support"}
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Graduate.assistants"), geom="jitter", shape=I(1)) +
+  geom_smooth(aes(x=Year, y=Amount), color=I("black"), data=subset(startup.package, Item=="Graduate.assistants"), method="glm", family=poisson(link="log"), se=F) + 
+scale_color_discrete(guide="none") +
+ggtitle("Amount of startup funds allocated for graduate assistants")  +
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+Examining individual Colleges (and Departments) more closely, we find that in the Business college, startup packages which include graduate student support have become more common in most departments, though in many cases this increase may be sufficiently small as to reflect increases in graduate student pay over the ten-year period. 
+
+```{r GradExpenseAmtBus, echo=F, fig.width=8, fig.height=3, fig.cap="Amount allocated for graduate assistant support"}
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, Item=="Graduate.assistants" & College=="Business")) + 
+  geom_jitter(shape=I(1)) +
+  geom_smooth(color=I("black"), method="glm", family=poisson(link="log"), se=F) + 
+  scale_color_discrete(guide="none") +
+  ggtitle("Amount of startup funds allocated for graduate assistants (Business)")  +
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=5, scales="free_y")
+```
+
+
+In the College of Design, startup funding allocated to graduate students has increased in several departments: Architecture, Landscape Architecture, A&VC, and CRP. The remaining departments either have minimal data points or do not provide graduate assistant support as part of startup packages. 
+```{r GradExpenseAmtDes, echo=F, fig.width=8, fig.height=4, fig.cap="Amount allocated for graduate assistant support"}
+tmp <- subset(startup.package, College=="Design" & Item=="Graduate.assistants") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1%in%c("GrD", "IntD", "ISA", "IndD")] <- NA
+
+qplot(Year, Amount, data=subset(startup.package, College=="Design" & Item=="Graduate.assistants"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  ggtitle("Amount of startup funds allocated for graduate assistants (Design)")  +
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+In the College of Engineering, most departments have increased the amount of startup funding allocated to graduate assistent support. Exceptions include the ABE and CBE departments. Of the departments which increased the amount of startup funding, the most dramatic increases were in Aerospace and Materials Engineering. 
+```{r GradExpenseAmtEngr, echo=F, fig.width=8, fig.height=4, fig.cap="Amount allocated for graduate assistant support"}
+tmp <- subset(startup.package, College=="Engineering" & Item=="Graduate.assistants") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1%in%c("GrD", "IntD", "ISA", "IndD")] <- NA
+
+qplot(Year, Amount, data=subset(startup.package, College=="Engineering" & Item=="Graduate.assistants"), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  ggtitle("Amount of startup funds allocated for graduate assistants (Engineering)")  +
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+In the College of Liberal Arts & Sciences, startup funding for graduate students is fairly rare and in many departments, the likelihood of such funding has changed over the past decade. Departments which have never allocated startup funding for graduate student support have been excluded from the graph below to conserve space. 
+```{r GradExpenseAmtLAS, echo=F, fig.width=8, fig.height=7, fig.cap="Amount allocated for graduate assistant support"}
+tmp <- subset(startup.package, College=="Liberal Arts & Science" & Item=="Graduate.assistants") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1%in%c("Anthro", "BBMB", "EEOB", "Engl", "FL&L", "GeAt", "Hist", "Math", "Music", "Phil & RS", "Physics", "Soc", "WL&C", "Econ", "Pol Sci")] <- NA
+
+deptlist <- c("Anthro", "BBMB", "EEOB", "Engl", "FL&L", "Hist", "Math", "Music", "Phil & RS", "Physics")
+tmp <- subset(tmp, !Dept1%in%deptlist)
+
+qplot(Year, Amount, data=subset(startup.package, College=="Liberal Arts & Science" & Item=="Graduate.assistants" & !Dept1%in%deptlist), geom="point", position=position_jitter(width=.4, height=0), shape=I(1)) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  ylab("Amount") + 
+  ggtitle("Amount of startup funds allocated for graduate assistants (Liberal Arts & Science)")  +
+  theme_bw() +
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+It is evident that in some departments (Chem, Econ, GeAt, Soc, Stat, WL&C) startup funding is almost never provided. Regression lines have not been fit for the majority of these departments. Startup funding for graduate students in Psychology has increased over the last decade, but funding in the Journalism department has declined. 
+
+
+# Summer Support
+```{r SummerExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for summer support."}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Summer.support"), geom="jitter", shape=I(1)) +
+  geom_smooth(aes(x=Year, y=Amount/Total.Cost), color=I("black"), data=subset(startup.package, Item=="Summer.support")) + 
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated for summer support")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Summer.support"), geom="jitter", shape=I(1)) +
+  geom_smooth(aes(x=Year, y=Amount), color=I("black"), data=subset(startup.package, Item=="Summer.support")) + 
+scale_color_discrete(guide="none") +
+ggtitle("Amount of startup funds allocated for summer support")  +
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+Summer funding seems to be fairly common in some areas (business, some of LAS) and almost unheard of in others (design, vet med). 
+
+# Research Support
+```{r ResearchExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for research support.", "Amount of startup $ allocated for research support.")}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Research.support"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated for research support")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Research.support"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Amount of funding allocated for research support")  +
+theme_bw() +
+facet_wrap(~College, ncol=4, scales="free_y")
+```
+
+# Moving Expenses
+```{r MovingExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for moving expenses.", "Amount allocated to moving expenses")}
+qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Moving.expenses"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Proportion of package allocated for moving expenses")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+
+qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Moving.expenses"), geom="jitter", shape=I(1)) +
+scale_color_discrete(guide="none") +
+ggtitle("Amount allocated for moving expenses")  +
+theme_bw() +
+facet_wrap(~College, ncol=4)
+```
+
+Moving expenses amounts seem to be reasonably consistent across colleges. The business college seems to once again have a standard package that may change year to year with occasional negotiation. The same may be true of the vet med college. 

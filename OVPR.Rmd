@@ -374,16 +374,23 @@ It is evident that in some departments (Chem, Econ, GeAt, Soc, Stat, WL&C) start
 
 
 # Summer Support
+Next, we consider the proportion of startup funding that is allocated for summer support. In some colleges, summer support makes up most of the startup package; in others, summer support is uncommon. Over time, there may be a small increease in the proportion of a startup package allocated to summer funding in LAS, with a possible small decrease in Business. 
 ```{r SummerExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for summer support."}
-qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Summer.support"), geom="jitter", shape=I(1)) +
-  geom_smooth(aes(x=Year, y=Amount/Total.Cost), color=I("black"), data=subset(startup.package, Item=="Summer.support")) + 
-scale_color_discrete(guide="none") +
-ggtitle("Proportion of package allocated for summer support")  +
-theme_bw() +
-facet_wrap(~College, ncol=4)
+ggplot(aes(x=Year, y=Amount/Total.Cost), data=subset(startup.package, Item=="Summer.support")) + 
+  geom_smooth(se=F) +
+  geom_jitter(aes(color=Dept1), shape=1) + 
+  scale_color_discrete(guide="none") +
+  ggtitle("Proportion of package allocated for summer support")  + ylab("Proportion of Startup Package") + 
+  # scale_y_continuous(limits=c(0,1)) +
+  theme_bw() +
+  facet_wrap(~College, ncol=4)
+```
 
+Examining the actual amounts of funding provided for summer support by college, we find that the amount of startup funding allocated for summer support has increased in most colleges over time, has stayed the same in the Business college, and has decreased in the College of Veterinary Medicine (though it was extremely uncommon that someone would get summer funding at all). The amount of funding also varies widely by college; in Engineering, startup funding for summer support has increeased from about $25000 in 2005 to about $50000 in 2015, while in LAS, the increase was from about $5000 to about $10000 over the same period. 
+
+```{r SummerExpenseAmount, echo=F, fig.width=8, fig.height=5, fig.cap="Amount of startup $ allocated for summer support."}
 qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Summer.support"), geom="jitter", shape=I(1)) +
-  geom_smooth(aes(x=Year, y=Amount), color=I("black"), data=subset(startup.package, Item=="Summer.support")) + 
+  geom_smooth(aes(x=Year, y=Amount), color=I("black"), data=subset(startup.package, Item=="Summer.support"), method="glm", family=poisson(link="log")) + 
 scale_color_discrete(guide="none") +
 ggtitle("Amount of startup funds allocated for summer support")  +
 theme_bw() +
@@ -391,15 +398,324 @@ facet_wrap(~College, ncol=4, scales="free_y")
 ```
 
 Summer funding seems to be fairly common in some areas (business, some of LAS) and almost unheard of in others (design, vet med). 
+Next, we examine the colleges where summer funding is typically a non-zero component of the startup package. 
+
+In the college of Ag & Life Science, summer support is increasing in many departments (though it has declined in others, such as Animal Science). Departments with fewer than 4 data points or fewer than 2 unique data points are excluded as regressions could not be accurately fit. Summer funding and starting salary are shown on the y-axis for scale (poisson regression), with the summer funding data shown as individual data points. 
+```{r SummerExpenseAmountAGLS, echo=F, fig.width=8, fig.height=7, fig.cap="Amount of startup $ allocated for summer support."}
+college <- "Ag & Life Science"
+tmp <- subset(startup.package, College==college & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount)
+               )
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+tmp2 <- subset(startup.package, College==college & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Starting.salary ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount)
+               )
+  }) 
+tmp2$Amount[!tmp2$converged] <- NA
+tmp2$Amount[tmp2$nval<=2] <- NA
+tmp2$Amount[tmp2$npts<=3] <- NA
+
+tmp$type <- "Summer"
+tmp2$type <- "Salary"
+tmp <- rbind(tmp, tmp2)
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College==college & Item=="Summer.support" & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount, color=type), data=tmp) +
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Amount of startup funds allocated for summer support \n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=3, scales="free_y")
+```
+
+In the College of Business, summer support is less homogeneous. Whereas in LAS summer support was a small proportion of starting salary, in the Business college, summer supprt is more generous (possibly because it covers more years than support in LAS). The amount of support has declined in Management, stayed approximately the same in Accounting, SCIS, and Marketing, and increased with salary level in Finance.  
+```{r SummerExpenseAmountBus, echo=F, fig.width=8, fig.height=7, fig.cap="Amount of startup $ allocated for summer support."}
+college <- "Business"
+tmp <- subset(startup.package, College==college & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount)
+               )
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+tmp2 <- subset(startup.package, College==college & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Starting.salary ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount)
+               )
+  }) 
+tmp2$Amount[!tmp2$converged] <- NA
+tmp2$Amount[tmp2$nval<=2] <- NA
+tmp2$Amount[tmp2$npts<=3] <- NA
+
+tmp$type <- "Summer"
+tmp2$type <- "Salary"
+tmp <- rbind(tmp, tmp2)
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College==college & Item=="Summer.support" & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount, color=type), data=tmp) +
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Amount of startup funds allocated for summer support \n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=3, scales="free_y")
+```
+
+In the College of Engineering, summer support is increasing relative to starting salary in several departments (AerE, CCEE, IMSE, ME, MSE). In other departments, startup funding for summer support has stayed relatively consistent or declined slightly over time (ABE, CBE, ECpe). 
+```{r SummerExpenseAmountEngr, echo=F, fig.width=8, fig.height=7, fig.cap="Amount of startup $ allocated for summer support."}
+college <- "Engineering"
+tmp <- subset(startup.package, College==college & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount), 
+               max.val=max(.$model$data$Amount)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>5*max.val, NA, Amount))
+
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+tmp$Amount[tmp$Amount>1e6] <- NA
+
+tmp2 <- subset(startup.package, College==college & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Starting.salary ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount), 
+               max.val=max(.$model$data$Amount)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>5*max.val, NA, Amount))
+  
+tmp2$Amount[!tmp2$converged] <- NA
+tmp2$Amount[tmp2$nval<=2] <- NA
+tmp2$Amount[tmp2$npts<=3] <- NA
+
+tmp$type <- "Summer"
+tmp2$type <- "Salary"
+tmp <- rbind(tmp, tmp2)
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College==college & Item=="Summer.support" & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount, color=type), data=tmp) +
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Amount of startup funds allocated for summer support \n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=3, scales="free_y")
+```
+
+In the college of Human Sciences, startup funding summer support is increasing, but at a rate consistent with salary increases in departments where starting salary is increasing over time, and at a rate comparable with other departments in deaprtments where salary level is decreasing over time. 
+```{r SummerExpenseAmountHumSci, echo=F, fig.width=8, fig.height=7, fig.cap="Amount of startup $ allocated for summer support."}
+college <- "Hum Sci"
+tmp <- subset(startup.package, College==college & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount), 
+               max.val=max(.$model$data$Amount)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>5*max.val, NA, Amount))
+
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+tmp$Amount[tmp$Amount>1e6] <- NA
+
+tmp2 <- subset(startup.package, College==college & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Starting.salary ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount), 
+               max.val=max(.$model$data$Amount)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>5*max.val, NA, Amount))
+  
+tmp2$Amount[!tmp2$converged] <- NA
+tmp2$Amount[tmp2$nval<=2] <- NA
+tmp2$Amount[tmp2$npts<=3] <- NA
+
+tmp$type <- "Summer"
+tmp2$type <- "Salary"
+tmp <- rbind(tmp, tmp2)
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College==college & Item=="Summer.support" & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount, color=type), data=tmp) +
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Amount of startup funds allocated for summer support \n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=3, scales="free_y")
+```
+
+Finally, in the College of Liberal Arts & Sciences: In the computer science department, the summer funding component of startup packages has declined, but the corresponding salaries have increased (by more than the funding decrease). In most other departments, summer funding has increased at a similar or lower rate as starting salaries. 
+```{r SummerExpenseAmountLAS, echo=F, fig.width=8, fig.height=7, fig.cap="Amount of startup $ allocated for summer support."}
+tmp <- subset(startup.package, College=="Liberal Arts & Science" & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged)
+  }) 
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$Dept1%in%c("Anthro", "BBMB", "EEOB", "FL&L", "GDCB", "GeAt", "Physics")] <- NA
+tmp2 <- subset(startup.package, College=="Liberal Arts & Science" & Item=="Summer.support") %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Starting.salary ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged)
+  }) 
+tmp$type <- "Summer"
+tmp2$type <- "Salary"
+tmp <- rbind(tmp, tmp2)
+
+# deptlist <- c("Anthro", "BBMB", "EEOB", "Engl", "FL&L", "Hist", "Math", "Music", "Phil & RS", "Physics")
+# tmp <- subset(tmp, !Dept1%in%deptlist)
+
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College=="Liberal Arts & Science" & Item=="Summer.support")) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount, color=type), data=tmp) +
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle("Amount of startup funds allocated for summer support \n(Liberal Arts & Science)")  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=3, scales="free_y")
+```
+
 
 # Research Support
-```{r ResearchExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for research support.", "Amount of startup $ allocated for research support.")}
+Research support is another component of the startup package that varies widely between colleges and by department within colleges. 
+First, we examine the proportion of the startup package which is allocated for research support, by college. In AG & Life Science, Liberal Arts & Science, and Vet Med, it is not uncommon for the entire startup package to be allocated to research support; in the Business, Design, and Human Sciences colleges, it is uncommon for research support to comprise a significant proportion of the startup package. 
+```{r ResearchExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for research support."}
 qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Research.support"), geom="jitter", shape=I(1)) +
 scale_color_discrete(guide="none") +
 ggtitle("Proportion of package allocated for research support")  +
 theme_bw() +
 facet_wrap(~College, ncol=4)
+```
 
+Examining the actual amounts of funding provided for research support by college, we find that the amount of startup funding allocated for research support has stayed reasonably constant over time (with perhaps a slight increase in Liberal Arts & Science. 
+
+```{r ResearchExpenseAmount, echo=F, fig.width=8, fig.height=5, fig.cap="Amount of startup $ allocated for research support."}
 qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Research.support"), geom="jitter", shape=I(1)) +
 scale_color_discrete(guide="none") +
 ggtitle("Amount of funding allocated for research support")  +
@@ -407,19 +723,133 @@ theme_bw() +
 facet_wrap(~College, ncol=4, scales="free_y")
 ```
 
-# Moving Expenses
-```{r MovingExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap=c("Proportion of startup $ allocated for moving expenses.", "Amount allocated to moving expenses")}
-qplot(Year, Amount/Total.Cost, color=Dept1, data=subset(startup.package, Item=="Moving.expenses"), geom="jitter", shape=I(1)) +
-scale_color_discrete(guide="none") +
-ggtitle("Proportion of package allocated for moving expenses")  +
-theme_bw() +
-facet_wrap(~College, ncol=4)
+Examining the College of Ag & Life Science at the department level, we find that in many departments, the amount of research support included in startup packages has increased, but other departments (Animal Science, ABE, and FSHN), research support has decreased, sometimes dramatically. 
+```{r ResearchExpenseAmountAGLS, echo=F, fig.width=8, fig.height=7, fig.cap="Amount allocated for research support"}
+college <- "Ag & Life Science"
+item <- "Research.support"
+Item.cap <- "research support"
+tmp <- subset(startup.package, College==college & Item==item) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount), 
+               max.val=max(.$model$data$Amount)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
 
-qplot(Year, Amount, color=Dept1, data=subset(startup.package, Item=="Moving.expenses"), geom="jitter", shape=I(1)) +
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College==college & Item==item & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Amount of startup funds allocated for %s \n(%s)", Item.cap, college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+In the College of Engineering, we find that in about half the departments, research support in startup packages has decreased over the past 10 years, but in several other departments, research support has increased (in some cases dramatically, as in the ME department). Additionally, the departments who decreased research funding in startup packages were generally not providing large amounts of funding, where the departments who increased research funding in startup packages have much larger magnitude awards for research. 
+```{r ResearchExpenseAmountEngr, echo=F, fig.width=8, fig.height=7, fig.cap="Amount allocated for research support"}
+college <- "Engineering"
+item <- "Research.support"
+Item.cap <- "research support"
+tmp <- subset(startup.package, College==college & Item==item) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount), 
+               max.val=max(.$model$data$Amount)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College==college & Item==item & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Amount of startup funds allocated for %s \n(%s)", Item.cap, college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+Finally, in the College of Liberal Arts & Science, research support in startup packages has increased in several departments, only declining in the Math, History, Psychology, and Sociology departments. The most dramatic (and consistent) increase has been in the Computer Science and Statistics departments (stronger curves in Anthropology, GeAt, and Political Science are potentially due to single high-influence points and are thus disregarded for the purposes of this analysis). 
+```{r ResearchExpenseAmountLAS, echo=F, fig.width=8, fig.height=7, fig.cap="Amount allocated for research support"}
+college <- "Liberal Arts & Science"
+item <- "Research.support"
+Item.cap <- "research support"
+tmp <- subset(startup.package, College==college & Item==item) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Amount)),
+               npts=length(.$model$data$Amount), 
+               max.val=max(.$model$data$Amount)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College==college & Item==item & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Amount of startup funds allocated for %s \n(%s)", Item.cap, college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+# Moving Expenses
+The amount of startup funding allocated to moving expenses has remained reasonably consistent over time, across colleges. There has been a slight decline in the amount allocated for moving expenses in Vet Med, which may be due to the hiring of clinicians who may not be able to negotiate moving expenses as part of a hiring package. The business college seems to have a standard package that may change year to year with occasional negotiation, explaining the lower variability in moving expenses. 
+```{r MovingExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Amount allocated to moving expenses"}
+qplot(Year, Amount, data=subset(startup.package, Item=="Moving.expenses"), geom="jitter", shape=I(1)) +
+  geom_smooth(method="glm", family=poisson(link="log"), se=F) + 
 scale_color_discrete(guide="none") +
 ggtitle("Amount allocated for moving expenses")  +
 theme_bw() +
 facet_wrap(~College, ncol=4)
 ```
-
-Moving expenses amounts seem to be reasonably consistent across colleges. The business college seems to once again have a standard package that may change year to year with occasional negotiation. The same may be true of the vet med college. 

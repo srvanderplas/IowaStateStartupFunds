@@ -655,7 +655,7 @@ ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College==college & It
 ```
 
 Finally, in the College of Liberal Arts & Sciences: In the computer science department, the summer funding component of startup packages has declined, but the corresponding salaries have increased (by more than the funding decrease). In most other departments, summer funding has increased at a similar or lower rate as starting salaries. 
-```{r SummerExpenseAmountLAS, echo=F, fig.width=8, fig.height=9, fig.cap="Amount of startup $ allocated for summer support."}
+```{r SummerExpenseAmountLAS, echo=F, fig.width=8, fig.height=7, fig.cap="Amount of startup $ allocated for summer support."}
 tmp <- subset(startup.package, College=="Liberal Arts & Science" & Item=="Summer.support") %>% 
   group_by(College, Dept1) %>%
   do(model=glm(Amount ~ Year, family=poisson(link="log"), data=.)) %>%
@@ -698,7 +698,7 @@ ggplot(aes(x=Year, y=Amount), data=subset(startup.package, College=="Liberal Art
   ylab("Amount") + 
   ggtitle("Amount of startup funds allocated for summer support \n(Liberal Arts & Science)")  +
   theme_bw() + theme(legend.position="bottom") + 
-  facet_wrap(~Dept1, ncol=3, scales="free_y")
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
 ```
 
 

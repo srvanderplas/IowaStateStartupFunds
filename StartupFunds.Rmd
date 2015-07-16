@@ -207,7 +207,7 @@ rm(tmp)
 ggplot(aes(x=YearsAtISU, y=total.pubs), data=subset(citations.yearly, atISU & !is.na(CollegeFac))) +
   geom_vline(xintercept=0) + 
   geom_jitter(size=1, shape=1, position=position_jitter(width=.4, height=.4), alpha=.3) + 
-  geom_smooth(aes(group=Dept1), se=F, alpha=.25) + 
+  geom_smooth(se=F, span=.6, size=2) + 
   facet_wrap(~CollegeFac, ncol=4) + 
   xlab("Years at ISU") + ylab("Papers Published/Year") + 
   ggtitle("Yearly Publications") +
@@ -215,7 +215,7 @@ ggplot(aes(x=YearsAtISU, y=total.pubs), data=subset(citations.yearly, atISU & !i
   scale_x_continuous(breaks=c(-5, 0, 5, 10))
 ```
 
-Above, the x-axis shows time at Iowa State (or rather, time since hired), and the y-axis shows the yearly publications (books, articles, etc.). The blue lines indicate departmental averages over time (loess smooth), where there is sufficient data to compute such averages. From this broad overview, we see that publications in many departments peak at approximately 5 years, and then tail off slightly by year 10. 
+Above, the x-axis shows time at Iowa State (or rather, time since hired), and the y-axis shows the yearly publications (books, articles, etc.). The blue lines indicate departmental averages over time (loess smooth), where there is sufficient data to compute such averages. From this broad overview, we see that publications in many colleges peak at approximately 5 years, and then tail off slightly by year 10. 
 
 Further analysis is provided in the Merged Data section. 
 

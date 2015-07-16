@@ -326,6 +326,7 @@ ggplot(aes(x=Year, y=Total.Cost), data=subset(hires, College==college & Dept1%in
 
 
 Next, we explore the components of the startup packages and how those allocations have changed over time. 
+
 # Computing Expenses
 
 ```{r ComputingExpenseProp, echo=F, fig.width=8, fig.height=5, fig.cap="Proportion of startup $ allocated for computers"}

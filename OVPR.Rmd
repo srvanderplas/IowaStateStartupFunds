@@ -56,6 +56,275 @@ facet_wrap(~College, ncol=4)
 
 This graph shows the startup funding for each college over time, with colored points indicating each department. The College of Human Sciences seems to have experienced an increase in startup funding, but most other colleges have maintained similar startup funding ranges over time. We also note that there are several hires in the College of Veterinary Medicine with no startup packages; these hires were for Clinician and Adjunct/Lecturer positions. 
 
+Examining these trends at a departmental level, we find that some departments are providing increasingly larger startup packages over time, while some departments are cutting startup funding dramatically.
+```{r TotalCostAGLS, echo=F, fig.width=8, fig.height=7, fig.cap="Total Startup Package Cost"}
+college <- "Ag & Life Science"
+tmp <- subset(hires, College==college) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Total.Cost ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Total.Cost)),
+               npts=length(.$model$data$Total.Cost), 
+               max.val=max(.$model$data$Total.Cost)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Total.Cost), data=subset(hires, College==college & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Total Startup Funding Package\n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+```{r TotalCostBus, echo=F, fig.width=8, fig.height=3, fig.cap="Total Startup Package Cost"}
+college <- "Business"
+tmp <- subset(hires, College==college) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Total.Cost ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Total.Cost)),
+               npts=length(.$model$data$Total.Cost), 
+               max.val=max(.$model$data$Total.Cost)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Total.Cost), data=subset(hires, College==college & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Total Startup Funding Package\n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=5, scales="free_y")
+```
+
+```{r TotalCostDes, echo=F, fig.width=8, fig.height=3, fig.cap="Total Startup Package Cost"}
+college <- "Design"
+tmp <- subset(hires, College==college) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Total.Cost ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Total.Cost)),
+               npts=length(.$model$data$Total.Cost), 
+               max.val=max(.$model$data$Total.Cost)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Total.Cost), data=subset(hires, College==college & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Total Startup Funding Package\n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=5, scales="free_y")
+```
+
+```{r TotalCostEngr, echo=F, fig.width=8, fig.height=5, fig.cap="Total Startup Package Cost"}
+college <- "Engineering"
+tmp <- subset(hires, College==college) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Total.Cost ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Total.Cost)),
+               npts=length(.$model$data$Total.Cost), 
+               max.val=max(.$model$data$Total.Cost)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Total.Cost), data=subset(hires, College==college & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Total Startup Funding Package\n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+```{r TotalCostHumSci, echo=F, fig.width=8, fig.height=5, fig.cap="Total Startup Package Cost"}
+college <- "Hum Sci"
+tmp <- subset(hires, College==college) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Total.Cost ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Total.Cost)),
+               npts=length(.$model$data$Total.Cost), 
+               max.val=max(.$model$data$Total.Cost)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Total.Cost), data=subset(hires, College==college & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Total Startup Funding Package\n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+```{r TotalCostLAS, echo=F, fig.width=8, fig.height=11, fig.cap="Total Startup Package Cost"}
+college <- "Liberal Arts & Science"
+tmp <- subset(hires, College==college) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Total.Cost ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Total.Cost)),
+               npts=length(.$model$data$Total.Cost), 
+               max.val=max(.$model$data$Total.Cost)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Total.Cost), data=subset(hires, College==college & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Total Startup Funding Package\n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=4, scales="free_y")
+```
+
+```{r TotalCostVetMed, echo=F, fig.width=8, fig.height=3, fig.cap="Total Startup Package Cost"}
+college <- "Vet Med"
+tmp <- subset(hires, College==college) %>% 
+  group_by(College, Dept1) %>%
+  do(model=glm(Total.Cost ~ Year, family=poisson(link="log"), data=.)) %>%
+  do({
+    data.frame(College = .$College, 
+               Dept1=.$Dept1, 
+               Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2), 
+               Amount=predict(.$model, 
+                              newdata=data.frame(Year=seq(min(.$model$data$Year)-1, max(.$model$data$Year)+1, .2)), 
+                                                 type="response"), 
+               converged=.$model$converged, 
+               nval=length(unique(.$model$data$Total.Cost)),
+               npts=length(.$model$data$Total.Cost), 
+               max.val=max(.$model$data$Total.Cost)
+               )
+  }) %>%
+  transform(Amount=ifelse(Amount>3*max.val, NA, Amount))
+tmp$Amount[!tmp$converged] <- NA
+tmp$Amount[tmp$nval<=2] <- NA
+tmp$Amount[tmp$npts<=3] <- NA
+
+deptlist <- tmp %>% group_by(College, Dept1) %>% do({data.frame(keep=ifelse(sum(!is.na(.$Amount))>0, unique(.$Dept1), NA))})
+tmp <- subset(tmp, Dept1%in%deptlist$keep)
+
+ggplot(aes(x=Year, y=Total.Cost), data=subset(hires, College==college & Dept1%in%deptlist$keep)) +
+  geom_point(position=position_jitter(width=.4, heigh=0), shape=1) +
+  geom_line(aes(x=Year, y=Amount), data=tmp) +
+  scale_x_continuous(breaks=c(2005, 2010, 2015)) + 
+  geom_point(aes(x=2010, y=0, shape=NA), aes.inherit=F) + 
+  scale_color_discrete("") + 
+  ylab("Amount") + 
+  ggtitle(sprintf("Total Startup Funding Package\n(%s)", college))  +
+  theme_bw() + theme(legend.position="bottom") + 
+  facet_wrap(~Dept1, ncol=5, scales="free_y")
+```
+
+
+
 Next, we explore the components of the startup packages and how those allocations have changed over time. 
 # Computing Expenses
 

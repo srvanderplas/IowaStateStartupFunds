@@ -42,6 +42,11 @@ tmp$ProfRankFac <- tmp$ProfRank %>%
   factor(levels=c("Asst Prof", "Assoc Prof", "Prof", "Other"), labels=c("Assistant", "Associate", "Professor", "Other"))
 
 tmp$CollegeFac <- tmp$College %>% factor(labels=c("AGLS", "Bus", "Des", "Engr", "Hum Sci", "LAS", "Vet Med"))
+tmp$College2 <- tmp$CollegeFac
+tmp$College2[CollegeFac=="LAS" & Dept1%in%c("Anthro", "Econ", "Greenlee", "Pol Sci", "Psych", "Soc")] <- "LAS: Social Sci"
+tmp$College2[CollegeFac=="LAS" & Dept1%in%c("BBMB", "Chem", "Com S", "EEOB", "GDCB", "GeAt", "Math", "Physics", "Stat")] <- "LAS: Science"
+tmp$College2[CollegeFac=="LAS" & Dept1%in%c("Engl", "Hist", "Music", "Phil & RS", "WL&C")] <- "LAS: Arts"
+
 
 # -------------------------------------------------------------------------------
 

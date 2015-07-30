@@ -336,7 +336,6 @@ rm(dept2.is.prog)
 hires$Dept1 <- str_extract(hires$Dept, "^[A-Za-z &]*/?") %>% str_replace("/", "")
 hires$Dept2 <- str_extract(hires$Dept, "[/](.*)$") %>% str_replace_all("/", "")
 
-col.order <- c(col.order[1:3], "Dept1", "Dept2", "Prog", "Extension", col.order[-c(1:3)], "Dept.old")
 
 # Create  year variable for plotting
 hires$Year <- as.numeric(gsub("FY", "", hires$Start.Date)) + 2000

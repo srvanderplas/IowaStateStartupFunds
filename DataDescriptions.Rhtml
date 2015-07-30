@@ -1,0 +1,99 @@
+<!--begin.rcode setup, echo=F, include=F, message=F, warning=F
+library(knitr)
+library(htmltools)
+library(stringr) # for string manipulation
+library(lubridate) # for date manipulation
+library(reshape2) # for reshaping data
+library(plyr) # for rbind.fill function
+library(dplyr) # for %>% operator
+library(ggplot2)
+library(scales)
+library(DT)
+
+knitr::opts_chunk$set(bootstrap.show.code=FALSE, bootstrap.show.output=FALSE, bootstrap.show.message=FALSE, warning=F, message=F, out.width="100%", cache=T, echo=F, dpi=300)
+knitr::opts_knit$set(root.dir="../../IowaStateStartupFunds/")
+end.rcode-->
+<!--begin.rcode OVPRdata, cache=F
+# source("Code/CleanStartupFundingData.R")
+load("Data/Hires.RData")
+load("Data/FundingStartup.RData")
+end.rcode-->
+<!--begin.rcode OSPAdata, cache=F
+# source("Code/CleanAwardsData.R")
+# source("Code/CleanProposalsData.R")
+load("Data/Awards.RData")
+load("Data/Proposals.RData")
+end.rcode-->
+<!--begin.rcode GScholarData, cache=F
+# source("Code/Publication Results.R")
+load("Data/Publications.RData")
+end.rcode-->
+
+<div class="panel-group" role="tablist" aria-multiselectable="true">
+  <div class="panel panel-default">
+    <div class="panel-heading" role="tab" id="headingOne">
+      <h4 class="panel-title">
+        <a class="collapsed" role="button" data-toggle="collapse" href="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+          Spreadsheets from the Office of the Vice President for Research
+        </a>
+      </h4>
+    </div>
+    <div id="collapseOne" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingOne">
+      <div class="panel-body">
+        <ul>
+          <li>Name, Department, College, Salary, Start Date</li>
+          <li>Startup package allocation (by category) </li>
+          <li>Source of startup funding </li>
+          <li><!--rinline length(unique(hires$Name))--> hires between <!--rinline min(hires$Year)--> and <!--rinline max(hires$Year)--></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="panel panel-default">
+    <div class="panel-heading" role="tab" id="headingTwo">
+      <h4 class="panel-title">
+        <a class="collapsed" role="button" data-toggle="collapse" href="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+          Data from Office of Sponsored Programs Administration
+        </a>
+      </h4>
+    </div>
+    <div id="collapseTwo" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingTwo">
+      <div class="panel-body">
+        <p>Structure: 2 databases, 2005-2010 and 2010-2015. Early database will be messier</p>
+        <ul>
+          <li>Grants received (by month, as well as total award $$)</li>
+            <ul>
+              <li> Data summarized to create a dataset containing award totals for each investigator </li>
+              <li>  <!--rinline length(unique(awards$Investigator))--> investigators received <!--rinline length(unique(awards$Award.Number))--> grants and awards totaling $<!--rinline ((awards %>% ungroup() %>% filter(Role=="PI") %>% summarize(sum(Award.Amount)) %>% as.numeric())/1e9) %>% round(digits=2)--> billion</li>
+            </ul>
+          <li>Proposals submitted</li>
+            <ul>
+              <li>  <!--rinline length(unique(prop$Investigator))--> investigators submitted <!--rinline prop %>% ungroup %>% filter(Role=="PI") %>% summarize(length(unique(Proposal.Number))) %>% as.numeric()--> proposals worth a total of $<!--rinline ((prop %>% ungroup() %>% filter(Role=="PI") %>% summarize(sum(Proposal.Amount)) %>% as.numeric())/1e9) %>% round(digits=2)--> billion </li>
+              <li> Of submitted proposals, <!--rinline prop %>% ungroup %>% filter(Role=="PI") %>% summarize(pct=sum(Proposal.Status=="Funded")/length(Proposal.Status)*100) %>% round(digits=2) %>% as.numeric()-->% were funded, <!--rinline prop %>% ungroup %>% filter(Role=="PI") %>% summarize(pct=sum(Proposal.Status=="Rejected")/length(Proposal.Status)*100) %>% round(digits=2) %>% as.numeric()-->% were rejected, and <!--rinline prop %>% ungroup %>% filter(Role=="PI") %>% summarize(pct=sum(Proposal.Status=="Pending")/length(Proposal.Status)*100) %>% round(digits=2) %>% as.numeric()-->% are still pending.
+            </ul>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="panel panel-default">
+    <div class="panel-heading" role="tab" id="headingThree">
+      <h4 class="panel-title">
+        <a class="collapsed" role="button" data-toggle="collapse" href="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
+          Additional information
+        </a>
+      </h4>
+    </div>
+    <div id="collapseThree" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingThree">
+      <div class="panel-body">
+        <ul>
+          <li>Publications (from scraping Google Scholar)</li>
+            <ul>
+              <li> <!--rinline nrow(citations)--> citations found for <!--rinline length(unique(citations$author))--> of the <!--rinline length(unique(hires$Name))--> total new hires between 2005 and 2015. </li>
+              <li> Average number of publications per author (of authors with identified publications): <!--rinline citations %>% ungroup %>% group_by(author) %>% summarize(n=length(author)) %>% ungroup() %>% summarize(n=mean(n)) %>% as.numeric() %>% round(digits=1) -->. 75% of authors had at least <!--rinline citations %>% ungroup %>% group_by(author) %>% summarize(n=length(author)) %>% ungroup() %>% summarize(n=quantile(n, .25)) %>% as.numeric() --> publications, and 50% of authors had more than <!--rinline citations %>% ungroup %>% group_by(author) %>% summarize(n=length(author)) %>% ungroup() %>% summarize(n=quantile(n, .5)) %>% as.numeric() --> publications (One author had <!--rinline citations %>% ungroup %>% group_by(author) %>% summarize(n=length(author)) %>% ungroup() %>% summarize(n=max(n)) %>% as.numeric() --> publications!) </li>
+            </ul>
+          <li> (Potentially) where individuals came from (public/private institution, small/large)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>

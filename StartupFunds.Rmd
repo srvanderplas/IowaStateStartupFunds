@@ -601,7 +601,7 @@ We initially consider the effect that startup packages have on the number of pub
 ggplot(aes(x=Total.Cost, y=(total.pubs)/(YearsAtISU+1)), data=subset(citations.total, Total.Cost>0 & ProfRankFac!="Other")) +
   geom_smooth(aes(ymin=pmax(0, ..ymin..)), span=.9, level=.9) +
   geom_point(shape=1, size=2, alpha=.25, guide=F) + 
-  facet_wrap(~CollegeFac, scales="free", ncol=4) + 
+  facet_wrap(~CollegeFac, scales="free", ncol=5) + 
   xlab("Startup Cost") + ylab("Yearly Publications") + 
   ggtitle("Publication Rate, By College and Years at ISU") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 

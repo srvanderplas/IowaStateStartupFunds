@@ -106,6 +106,10 @@ isuHires$ProfRankFac <- isuHires$ProfRank %>%
   factor(levels=c("Asst Prof", "Assoc Prof", "Prof", "Other"), labels=c("Assistant", "Associate", "Professor", "Other"))
 
 isuHires$CollegeFac <- isuHires$College %>% factor(labels=c("AGLS", "Bus", "Des", "Engr", "Hum Sci", "LAS", "Vet Med"))
+isuHires$CollegeFac <- as.character(isuHires$CollegeFac)
+isuHires$CollegeFac[isuHires$CollegeFac=="LAS" & isuHires$Dept1%in%c("Anthro", "Econ", "Greenlee", "Pol Sci", "Psych", "Soc")] <- "LAS: Social Sci"
+isuHires$CollegeFac[isuHires$CollegeFac=="LAS" & isuHires$Dept1%in%c("BBMB", "Chem", "Com S", "EEOB", "GDCB", "GeAt", "Math", "Physics", "Stat")] <- "LAS: Science"
+isuHires$CollegeFac[isuHires$CollegeFac=="LAS" & isuHires$Dept1%in%c("Engl", "FL&L", "Hist", "Music", "Phil & RS", "WL&C")] <- "LAS: Arts"
 
 isuHires$YearsAtISU <- 2015 - isuHires$Year
 
@@ -154,16 +158,16 @@ load("Data/Publications.RData")
 ```
 ```{r GScholarMerge, cache=F}
 # Hire information
-tmp <- isuHires[,c("Name", "CollegeFac", "Dept1", "Dept2", "Year", "YearsAtISU", "YearsAtISUFac", "ProfRank", "ProfRankFac", "Total.Cost", "TotalCostFac")]
+tmp <- isuHires[,c("Name", "CollegeFac", "Dept1", "Dept2", "Year", "ProfRank", "ProfRankFac", "Total.Cost", "TotalCostFac")]
 tmp$Name <- str_to_title(tmp$Name) %>% str_replace(fixed("O'd"), "O'D")
 citations <- merge(tmp, citations, by.x="Name", by.y="author", all=T)
 names(citations)[names(citations)=="year"] <- "year.pub"
 
 # Add in extra years
-citations <- citations %>% group_by(Name) %>% do({
+citations <- citations %>% ungroup %>% group_by(Name) %>% do({
   idx <- !c(2005:2015)%in%.$year.pub
   if(sum(idx)>0){
-    newdf <- data.frame(unique(.[,c("Name", "CollegeFac", "Dept1", "Dept2", "Year", "YearsAtISU", "YearsAtISUFac", "ProfRank", "ProfRankFac", "Total.Cost", "TotalCostFac")]), author.match=unique(.$Name), year.pub=c(2005:2015)[idx])
+    newdf <- data.frame(unique(.[,c("Name", "CollegeFac", "Dept1", "Dept2", "Year", "ProfRank", "ProfRankFac", "Total.Cost", "TotalCostFac")]), author.match=unique(.$Name), year.pub=c(2005:2015)[idx])
     rbind_list(., newdf) %>% as.data.frame() %>% arrange(year.pub)
   } else {
     .
@@ -176,16 +180,18 @@ citations$YearsAtISU <- with(citations, year.pub-Year)
 # citations <- subset(citations, year.pub+1>=Year)
 
 citations.yearly <- citations %>% 
-  group_by(Name, CollegeFac, Dept1, Dept2, Year, YearsAtISU, year.pub, ProfRank, ProfRankFac, Total.Cost, TotalCostFac) %>% 
+  group_by(Name, CollegeFac, Dept1, Year, year.pub, ProfRank, ProfRankFac, Total.Cost, TotalCostFac) %>% 
   summarize(
-    atISU=(unique(year.pub)>=unique(Year)),
+    YearsAtISU=unique(year.pub-Year),
     total.pubs=length(type[!is.na(type)]), 
     articles=sum(type=="article", na.rm=T), 
     books=sum(type=="book", na.rm=T), 
     other=sum(type=="other", na.rm=T))
+citations.yearly$atISU <- with(citations.yearly, year.pub-Year>=0)
+
 
 citations.total <- citations %>% 
-  group_by(Name, CollegeFac, Dept1, Dept2, Year, ProfRank, ProfRankFac, Total.Cost, TotalCostFac) %>%   
+  group_by(Name, CollegeFac, Dept1, Year, ProfRank, ProfRankFac, Total.Cost, TotalCostFac) %>%   
   summarize(
     YearsAtISU=2015-unique(Year),
     total.pubs=length(type[!is.na(type)]), 
@@ -218,11 +224,11 @@ Further analysis is provided in the Merged Data section.
 We'll begin by looking at the timeline - how many years at ISU are necessary before grant applications are successful? We split this by college and faculty rank (as we'd expect that full professors who are hired should be able to command grant money sooner than new faculty). Subsequent graphs show data from hired professors (i.e. not adjuncts, affiliates, lecturers, or clinicians). 
 
 ```{r YearsAtISUGrants, fig.width=6, fig.height=8, dpi=300}
-ggplot(aes(x=YearsAtISU, y=grant.received, color=CollegeFac, shape=CollegeFac), data=subset(isuHires, ProfRankFac!="Other" )) +
-  geom_jitter(size=4, alpha=.5) + 
-  # geom_smooth(se=F, adjust=2) + 
-  scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V'), guide=F) +
-  scale_color_discrete(guide=F) + 
+ggplot(aes(x=YearsAtISU, y=grant.received), data=subset(isuHires, ProfRankFac!="Other" )) +
+  geom_jitter(shape=1, size=4, alpha=.75) + 
+#   # geom_smooth(se=F, adjust=2) + 
+#   scale_shape_manual(values=c('A', 'B', 'D', 'E', 'H', 'L', 'V'), guide=F) +
+#   scale_color_discrete(guide=F) + 
   # guides(shape=guide_legend(ncol=4), color=guide_legend(ncol=4)) + 
   facet_grid(CollegeFac~ProfRankFac, scales="free") + 
   xlab("Years since hire") + ylab("Total Grant $ Received") + 
@@ -256,7 +262,7 @@ ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFa
   scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
-  facet_wrap(~CollegeFac, ncol=4) + 
+  facet_wrap(~CollegeFac, ncol=5) + 
   xlab("Years since hire") + ylab("Total Grant $ Received") + 
   ggtitle("Grant receipts based on hire date") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
@@ -276,21 +282,46 @@ With these caveats in mind,
 * Grants are relatively rare in the business college.   
 
 ### Individual Colleges: Grant Proposals and Startup Funding by Department
-Examining the LAS results in more detail, we see that departmental startup packages largely fall in the same quantiles. In Chemistry, Physics, BBMB, EEOB, Computer Science, Statistics, Economics, and Math, the career trajectory of grant proposals suggests that the large startup packages are worthwhile investments; these disciplines are also largely in the top two quartiles for startup funding. Psychology is more of a mixed bag; many psychologists received large startup packages but have not received significant grant funding. Disciplines with more economical startup packages are also less likely to have faculty receiving large grants; this is likely due to discipline norms, rather than faculty quality. 
-```{r YearsTotalCostGrantsLAS, fig.width=6, fig.height=6, dpi=300}
-ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="LAS" & ProfRankFac!="Other" )) +
+Examining the LAS results in more detail, we see that departmental startup packages largely fall in the same quantiles. In Chemistry, Physics, BBMB, EEOB, Computer Science, Statistics, Economics, and Math, the career trajectory of grant proposals suggests that in most cases large startup packages are worthwhile investments. Psychology is more of a mixed bag; many psychologists received large startup packages but have not received significant grant funding. Disciplines with more economical startup packages are also less likely to have faculty receiving large grants; this is likely due to discipline norms, rather than faculty quality. 
+```{r YearsTotalCostGrantsLAS-Arts, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="LAS: Arts" & ProfRankFac!="Other" )) +
   geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
   scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Total Grant $ Received") + 
-  ggtitle("Grant receipts based on hire date") +
+  ggtitle("Grant receipts based on hire date\n(LAS: Arts)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
   scale_x_continuous(breaks=c(0, 5, 10))
 ```
-
+```{r YearsTotalCostGrantsLAS-Science, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="LAS: Science" & ProfRankFac!="Other" )) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date\n(LAS: Science)") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```
+```{r YearsTotalCostGrantsLAS-SocialScience, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="LAS: Social Sci" & ProfRankFac!="Other" )) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Grant $ Received") + 
+  ggtitle("Grant receipts based on hire date\n(LAS: Social Science)") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7), limits=c(0, 2e7)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```
 By comparison, the College of Engineering is fairly consistent; some departments have more startup funding (MSE, CBE), but overall, grant receipts are largely similar (though there is not sufficient data for Ag & Biosystems Engineering to determine whether that department receives grants at the same rate as other departments). Grant funding may increase slightly over the course of a career (there are increases in AerE, MSE, and ME that are fairly consistent). After 2 years, most hires will have received at least $100,000 in grant funding, and many hires will have received at least one million in cumulative grants after 5-6 years. Startup funding does not seem to affect these trends in a significant way, except that more recent hires seem more likely to receive large startup packages, and are less likely to have received grant money at this point in their careers.  
 ```{r YearsTotalCostGrantEngr, fig.width=6, fig.height=6, dpi=300}
 ggplot(aes(x=YearsAtISU, y=grant.received, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="Engr" & ProfRankFac!="Other" )) +
@@ -408,7 +439,7 @@ ggplot(aes(x=YearsAtISU, y=total.proposal.money, shape=TotalCostFac, color=Total
   scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
-  facet_wrap(~CollegeFac, ncol=4) + 
+  facet_wrap(~CollegeFac, ncol=5) + 
   xlab("Years since hire") + ylab("Total Proposed $") + 
   ggtitle("Grant proposals based on hire date") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
@@ -425,21 +456,48 @@ With these caveats in mind,
 * Grant proposals are relatively rare in the business college.   
 
 ### Individual Colleges: Proposals and Startup Funding by Department
+
 Examining the LAS results in more detail, we see that departmental startup packages largely fall in the same quantiles. In Chemistry, Physics, BBMB, EEOB, Computer Science, Statistics, Psychology, and Math, the career trajectory of grant proposals suggests that the large startup packages are potentially worthwhile investments; these disciplines are also largely in the top two quartiles for startup funding. While many psychologists received large startup packages but have not received significant grant funding, it is apparent from this result that psychologists are applying for large amounts of funding, but are not necessarily successful. Disciplines with more economical startup packages are also less likely to have faculty applying for large grants; this is likely due to discipline norms, rather than faculty quality. 
-```{r YearsTotalCostProposalsLAS, fig.width=6, fig.height=6, dpi=300}
-ggplot(aes(x=YearsAtISU, y=total.proposal.money, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="LAS" & ProfRankFac!="Other" )) +
+```{r YearsTotalCostProposalsLAS-Arts, cache=T, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=total.proposal.money, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="LAS: Arts" & ProfRankFac!="Other" )) +
   geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
   scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Total Proposed $") + 
-  ggtitle("Grant proposals based on hire date") +
+  ggtitle("Grant proposals based on hire date (LAS: Arts)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7, 1e8), limits=c(0, 3e8)) + 
   scale_x_continuous(breaks=c(0, 5, 10))
 ```
 
+```{r YearsTotalCostProposalsLAS-Science, fig.width=6, fig.height=6, dpi=300, dependson='TotalCostQuartiles'}
+ggplot(aes(x=YearsAtISU, y=total.proposal.money, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="LAS: Science" & ProfRankFac!="Other" )) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Proposed $") + 
+  ggtitle("Grant proposals based on hire date\n(LAS: Science)") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7, 1e8), limits=c(0, 3e8)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```
+```{r YearsTotalCostProposalsLAS-SocialScience, fig.width=6, fig.height=6, dpi=300}
+ggplot(aes(x=YearsAtISU, y=total.proposal.money, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="LAS: Social Sci" & ProfRankFac!="Other" )) +
+  geom_jitter(size=3, position=position_jitter(width=.5, height=0)) + 
+  scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Total Proposed $") + 
+  ggtitle("Grant proposals based on hire date\n(LAS: Social Science)") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_y_continuous(trans="log_one", breaks=c(0, 10, 1e3, 1e5, 1e7, 1e8), limits=c(0, 3e8)) + 
+  scale_x_continuous(breaks=c(0, 5, 10))
+```
 By comparison, the College of Engineering is fairly consistent; some departments have more startup funding (MSE, CBE), but overall, grant proposals are largely similar (though there is not sufficient data for Ag & Biosystems Engineering to determine whether that department submits proposals for grants of the same magnitude as other departments). Proposed funding does not seem to increase significantly over the course of a career, in contrast to the rate of successful proposals. After 2 years, most hires will have proposed at least $100,000 in grant funding, and many hires will have proposed at least one million in cumulative grants after 5-6 years. 
 ```{r YearsTotalCostProposalsEngr, fig.width=6, fig.height=6, dpi=300}
 ggplot(aes(x=YearsAtISU, y=total.proposal.money, shape=TotalCostFac, color=TotalCostFac), data=subset(isuHires, CollegeFac=="Engr" & ProfRankFac!="Other" )) +
@@ -554,20 +612,46 @@ We see that in general, yearly publications are tenuously related to startup pac
 
 ### Analysis of Publications by College
 
-```{r GScholarLAS, fig.width=6, fig.height=8, dpi=300}
-ggplot(aes(x=YearsAtISU, y=total.pubs, shape=TotalCostFac, color=TotalCostFac), 
-       data=subset(citations.yearly, CollegeFac=="LAS")) +
+```{r GScholarLAS-Arts, fig.width=6, fig.height=8, dpi=300}
+ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, CollegeFac=="LAS: Arts")) +
   geom_line(aes(group=Name)) + 
   scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
   guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
   facet_wrap(~Dept1) + 
   xlab("Years since hire") + ylab("Yearly Publications") + 
-  ggtitle("Yearly Publications and Startup Funding (Liberal Arts & Sciences)") +
+  ggtitle("Yearly Publications and Startup Funding\n(Liberal Arts & Sciences: Arts)") +
   theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
   scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
 ```
 
+```{r GScholarLAS-Science, fig.width=6, fig.height=8, dpi=300}
+ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, CollegeFac=="LAS: Science")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding\n(Liberal Arts & Sciences: Sciences)") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
+```{r GScholarLAS-SocialSci, fig.width=6, fig.height=8, dpi=300}
+ggplot(aes(x=YearsAtISU, y=jitter(total.pubs, amount=.1), shape=TotalCostFac, color=TotalCostFac), 
+       data=subset(citations.yearly, CollegeFac=="LAS: Social Sci")) +
+  geom_line(aes(group=Name)) + 
+  scale_shape_manual("Startup Funding Quantile (by college)", values=as.character(1:4), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  scale_color_manual("Startup Funding Quantile (by college)", values=c("purple", "blue", "darkgreen", "orange"), labels=c("Q1", "Q2", "Q3", "Q4")) + 
+  guides(shape=guide_legend(ncol=4, override.aes=list(size=4)), color=guide_legend(ncol=4)) + 
+  facet_wrap(~Dept1) + 
+  xlab("Years since hire") + ylab("Yearly Publications") + 
+  ggtitle("Yearly Publications and Startup Funding\n(Liberal Arts & Sciences: Social Science)") +
+  theme_bw() + theme(legend.position="bottom", legend.direction="vertical") + 
+  scale_x_continuous(breaks=c(0, 5, 10), limit=c(0,10))
+```
 In some LAS departments, like Computer Science, publication frequency does not appear to be overly impacted by career stage. In other departments, such as Chemistry, publications increase over time, and then may decrease after 5-6 years. Departments such as Music do not seem to have much publication pressure (at least not which would appear on Google Scholar). In the statistics department, most hires publish at least 2 papers per year throughout their careers, but after 3-5 years, some professors begin publishing at a much higher rate, perhaps due to increased collaboration (in fact, in the statistics department, papers with more than 6 authors are extremely uncommon until year 4-5 at ISU). 
 
 In all departments, however, it seems that differential startup funding does not impact publication frequency or trajectory. 

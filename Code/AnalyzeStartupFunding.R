@@ -10,9 +10,12 @@ library(scales) # for greater legend/scale control
 
 
 # Read in and clean data --------------------------------------------------------
-source("Code/CleanAwardsData.R")
-source("Code/CleanProposalsData.R")
-source("Code/CleanStartupFundingData.R")
+# source("Code/CleanAwardsData.R")
+# source("Code/CleanProposalsData.R")
+# source("Code/CleanStartupFundingData.R")
+load("Data/Awards.RData")
+load("Data/FundingStartup.RData")
+load("Data/Hires.RData")
 # -------------------------------------------------------------------------------
 
 
@@ -143,53 +146,15 @@ source("Code/CleanStartupFundingData.R")
 
 # Predict 2016 Results -----------------------------------------------------------
 
-predict_2016 <- function(data){
-  # Only fit glm if nrow(data)>5
-  if(nrow(data)>=5){
-    model <- glm(Total.Cost~Year+Dept1, data=data, family=poisson(link="log"))
-    if(model$converged){
-      pred <- predict(model, newdata=data.frame(Year=2016, Amount=0), type="response", se.fit=TRUE)
-      ci <- as.numeric(pred$fit) + c(-1, 1)*1.96*as.numeric(pred$se.fit) 
-      return(
-        data.frame(
-          method="glm", 
-          College=unique(data$College), 
-          Dept1=unique(data$Dept1), 
-          pred.2016=as.numeric(pred$fit), 
-          LB=ci[1], UB=ci[2], 
-          intercept=model$coefficients[1], 
-          slope=model$coefficients[2]))
-    } else {
-      model <- glm(Total.Cost~1, data=data, family=poisson(link="log"))
-      ci <- confint()
-      return(
-        data.frame(
-          method="mean",
-          College=unique(data$College), 
-          Dept1=unique(data$Dept1), 
-          pred.2016=mean(data$Total.Cost, na.rm=T),
-          LB=
-        )
-      )
-    }
-  }
-}
+pred2016 <- subset(hires, ProfRank!="Other" & ProfRank!="Adjunct/Lecturer") %>% group_by(Dept1) %>% summarize(last.yr.hired=max(Year), Year=2016, n=length(Dept1), max=max(Total.Cost), last.hire=Total.Cost[which.max(Year)[1]], mean=mean(Total.Cost), sd=sd(Total.Cost))
+model <- glm(Total.Cost ~ (0 + Dept1)*(0+Year), data=hires%>% arrange(Dept1), family=poisson(link="log"))
+# model1 <- glm(Total.Cost ~ Year + Dept1, data=hires, family=poisson(link="log"))
+# anova(model1, model, test="Chisq")
+pred <- predict(model, newdata=pred2016, type="response", se.fit = TRUE)
+pred2016$Est <- pred$fit
+pred2016$SE <- pred$se.fit
+pred2016$diff <- with(pred2016, Est-mean)
+modelterms <- data.frame(Dept1=model$xlevels, Model.Intercept=model$coefficients[1:60], Model.Slope=model$coefficients[61:120], stringsAsFactors=F)
+pred2016 <- merge(pred2016, modelterms, all=TRUE)
 
-hires %>% 
-  group_by(Dept1) %>%
-  predict_2016
-qplot(Year, Amount, data=subset(startup.package, College=="Engineering" & Item=="Computer.peripherals"), 
-      geom="point", position=position_jitter(width=.4, height=0), shape=I(1))
-geom_smooth(method="glm", family=poisson(link = "log"))
-
-
-newdata <- hires %>% group_by(Dept1) %>% summarize(Year=2016, n=length(Dept1), mean=mean(Total.Cost), var=sd(Total.Cost), last.yr.hired=max(Year))
-model <- glm(Total.Cost~ Year*Dept1, data=hires, family=poisson(link="log"))
-pred <- predict(model, newdata=newdata, type="response", se.fit = TRUE)
-newdata$Est <- pred$fit
-newdata$SE <- pred$se.fit
-
-
-hires %>% group_by(Dept1) %>% summarize(n=length(Dept1))
-
-# Plot y=Dept, x=Total.Cost, with predictions
+write.csv(pred2016, "Data/2016Predictions.csv", row.names=FALSE)
